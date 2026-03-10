@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: tracking-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+server:
+  port: 8087
+app:
+  tenant:
+    base-url: jdbc:mysql://localhost:3306
+    username: root
+    password:
+    schemas:
+      default: tenant_default
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml

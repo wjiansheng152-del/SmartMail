@@ -1,0 +1,8 @@
+# Docker 环境：MySQL 使用服务名 mysql，密码与 compose 一致
+app:
+  tenant:
+    base-url: jdbc:mysql://mysql:3306
+    username: root
+    password: root
+    schemas:
+      default: tenant_default

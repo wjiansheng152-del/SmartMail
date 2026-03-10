@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: scheduler-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+server:
+  port: 8085
+app:
+  tenant:
+    base-url: jdbc:mysql://localhost:3306
+    username: root
+    password:
+    schemas:
+      default: tenant_default
+  trigger:
+    queue: smartmail.campaign.trigger
+    exchange: smartmail.trigger
+    routing-key: campaign.trigger

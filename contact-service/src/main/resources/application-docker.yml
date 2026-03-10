@@ -1,0 +1,8 @@
+# Docker 环境下使用：MySQL 使用 compose 服务名 mysql（与 contact 同属 smartmail 网络），密码与 compose 一致
+app:
+  tenant:
+    base-url: jdbc:mysql://mysql:3306
+    username: root
+    password: root
+    schemas:
+      default: tenant_default

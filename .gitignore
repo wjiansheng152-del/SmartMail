@@ -1,0 +1,19 @@
+# Maven
+target/
+*.jar
+*.war
+
+# Node
+node_modules/
+dist/
+.npm
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 环境/本地
+.env
+.env.local
+*.log

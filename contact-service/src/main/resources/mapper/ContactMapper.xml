@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.smartmail.contact.mapper.ContactMapper">
+    <select id="selectPageByGroupId" resultType="com.smartmail.contact.entity.Contact">
+        SELECT c.* FROM contact c
+        INNER JOIN contact_group_member m ON c.id = m.contact_id
+        WHERE m.group_id = #{groupId}
+        ORDER BY c.id DESC
+    </select>
+</mapper>

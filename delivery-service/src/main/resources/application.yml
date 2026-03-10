@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: delivery-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+  mail:
+    host: localhost
+    port: 1025
+    username:
+    password:
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+server:
+  port: 8086
+app:
+  tenant:
+    base-url: jdbc:mysql://localhost:3306
+    username: root
+    password:
+    schemas:
+      default: tenant_default
+  downstream:
+    contact-base-url: http://localhost:8082
+    template-base-url: http://localhost:8083
+    campaign-base-url: http://localhost:8084
+    tracking-base-url: http://localhost:8080
+  trigger:
+    queue: smartmail.campaign.trigger
+  send:
+    exchange: smartmail.send
+    routing-key: send.task
+  default:
+    from: noreply@smartmail.local
+  channel:
+    smtp:
+      enabled: true
+    api:
+      enabled: false

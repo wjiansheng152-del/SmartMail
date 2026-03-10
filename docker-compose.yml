@@ -1,0 +1,219 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: platform
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - smartmail
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smartmail
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartmail
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - smartmail
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      - iam
+    networks:
+      - smartmail
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+    networks:
+      - smartmail
+
+  iam:
+    build:
+      context: .
+      dockerfile: iam-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:h2:mem:iam;DB_CLOSE_DELAY=-1;MODE=MySQL
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ""
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  contact:
+    build:
+      context: .
+      dockerfile: contact-service/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  template:
+    build:
+      context: .
+      dockerfile: template-service/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  campaign:
+    build:
+      context: .
+      dockerfile: campaign-service/Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: scheduler-service/Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  delivery:
+    build:
+      context: .
+      dockerfile: delivery-service/Dockerfile
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_MAIL_HOST: mailhog
+      SPRING_MAIL_PORT: 1025
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  tracking:
+    build:
+      context: .
+      dockerfile: tracking-service/Dockerfile
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+  audit:
+    build:
+      context: .
+      dockerfile: audit-service/Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartmail
+
+volumes:
+  mysql_data:
+
+networks:
+  smartmail:
+    driver: bridge

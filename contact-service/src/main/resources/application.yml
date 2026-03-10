@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: contact-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+server:
+  port: 8082
+app:
+  tenant:
+    base-url: jdbc:mysql://localhost:3306
+    username: root
+    password:
+    schemas:
+      default: tenant_default
