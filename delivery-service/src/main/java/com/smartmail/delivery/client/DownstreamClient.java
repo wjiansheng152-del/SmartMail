@@ -13,6 +13,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +38,15 @@ public class DownstreamClient {
     @SuppressWarnings("unchecked")
     public Map<String, Object> getCampaign(Long campaignId, String tenantId) {
         String url = props.getCampaignBaseUrl() + "/api/campaign/campaign/" + campaignId;
-        return getWithTenant(url, tenantId, new ParameterizedTypeReference<Map<String, Object>>() {});
+        Map<String, Object> result = getWithTenant(url, tenantId, new ParameterizedTypeReference<Map<String, Object>>() {});
+        // #region agent log
+        try {
+            String esc = url.replace("\"", "\\\"");
+            String line = "{\"hypothesisId\":\"C\",\"message\":\"getCampaign result\",\"data\":{\"url\":\"" + esc + "\",\"resultNull\":" + (result == null) + "},\"timestamp\":" + System.currentTimeMillis() + "}";
+            Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        return result;
     }
 
     /** 获取模板详情 */

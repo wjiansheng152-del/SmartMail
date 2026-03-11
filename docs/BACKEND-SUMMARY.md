@@ -35,7 +35,7 @@
 
 | 功能 | 说明 |
 |------|------|
-| 活动管理 | 创建、按 ID 查询、列表；Campaign（name、templateId、groupId、status 默认 draft） |
+| 活动管理 | 创建、按 ID 查询、列表；Campaign（name、templateId、groupId、status 默认 draft、**created_by** 来自 X-User-Id，供发信时按创建人取 SMTP） |
 | A/B 测试 | AbTestService 解析 abConfig、分配 variant（CampaignAbAssignment）；campaign_ab_assignment 表 |
 | 数据 | 租户库 campaign、campaign_batch 表 |
 
@@ -52,9 +52,10 @@
 | 功能 | 说明 |
 |------|------|
 | 状态查询 | GET /status/{campaignId} 按 campaign_batch 汇总该活动下各批次的 total、sent、failed |
-| 发送能力 | SendTaskConsumer 消费 smartmail.send.task，调用 SendStrategy 发送，并回写 delivery_task 状态与 campaign_batch 的 success_count/fail_count |
-| 活动触发消费 | CampaignTriggerConsumer 消费 smartmail.campaign.trigger：拉取活动/模板/分组联系人，过滤退订与黑名单，创建 campaign_batch 与 delivery_task，向发送队列投递 SendTaskPayload（含 deliveryId、batchId、campaignId 等），邮件正文中注入打开追踪像素 URL |
-| 数据 | 租户库 delivery_task（含 batch_id）、campaign_batch；DownstreamClient 调用 contact/template/campaign 服务获取数据 |
+| **用户 SMTP 配置** | GET /smtp-config：按 X-User-Id 查询当前用户在本租户下的 SMTP 配置（密码脱敏）；PUT /smtp-config：保存/更新当前用户配置（密码 AES 加密落库）。发送时按活动创建人（campaign.created_by）取该用户的 smtp_config，有则用其动态构建 JavaMailSender 发信，无则用默认通道（如 MailHog） |
+| 发送能力 | SendTaskConsumer 消费 smartmail.send.task；若 SendTaskPayload 带 smtpConfigUserId 则按用户 SMTP 发信，否则调用 SendStrategy 默认通道；回写 delivery_task 状态与 campaign_batch 的 success_count/fail_count |
+| 活动触发消费 | CampaignTriggerConsumer 消费 smartmail.campaign.trigger：拉取活动/模板/分组联系人，过滤退订与黑名单，创建 campaign_batch 与 delivery_task，向发送队列投递 SendTaskPayload（含 deliveryId、batchId、campaignId、smtpConfigUserId 等），邮件正文中注入打开追踪像素 URL |
+| 数据 | 租户库 delivery_task（含 batch_id）、campaign_batch、**smtp_config**（按 user_id 存用户 SMTP）；DownstreamClient 调用 contact/template/campaign 服务获取数据；campaign 表含 created_by（活动创建人） |
 
 ### 7. 追踪 (tracking)
 
@@ -75,9 +76,9 @@
 
 | 项目 | 说明 |
 |------|------|
-| 库与表 | platform 库（sys_user、tenant_metadata）；租户库 tenant_default（contact、template、campaign、tracking、audit、delivery、scheduler、abtest、unsubscribe、blacklist 等 DDL） |
+| 库与表 | platform 库（sys_user、tenant_metadata）；租户库 tenant_default（contact、template、campaign、tracking、audit、delivery、scheduler、smtp_config、abtest、unsubscribe、blacklist 等 DDL） |
 | Docker | 各服务 Dockerfile；docker-compose 一键启动（MySQL、Redis、RabbitMQ、MailHog、各微服务）；依赖服务与业务服务同属 smartmail 网络；application-docker.yml 使用 mysql:3306 + root |
-| 文档 | API-AND-CLASS-REFERENCE.md（接口与重要类）；STARTUP-AND-VERIFICATION.md（启动与验证）；BUGFIX-LOG.md（问题修复记录）；RELEASE-CHECKLIST.md（发布检查） |
+| 文档 | [docs/README.md](README.md)（文档索引）；API-AND-CLASS-REFERENCE.md（接口与重要类）；STARTUP-AND-VERIFICATION.md（启动与验证）；PROJECT-STATUS.md（项目状态汇总）；BUGFIX-LOG.md（问题修复记录）；RELEASE-CHECKLIST.md（发布检查） |
 
 ---
 
@@ -105,7 +106,7 @@
 | 模板 | ✅ CRUD | ✅ | - |
 | 活动 | ✅ CRUD、A/B 分配 | ✅ | ✅ 由调度触发发送 |
 | 调度 | ✅ 创建/列表、计划落库、定时触发 MQ | ✅ schedule_job | ✅ 投递 CampaignTriggerPayload |
-| 投递 | ✅ 状态汇总、MQ 消费、回写状态、触发消费 | ✅ delivery_task、campaign_batch | ✅ 消费触发并生产发送任务 |
+| 投递 | ✅ 状态汇总、**用户 SMTP 配置 GET/PUT**、MQ 消费、回写状态、触发消费、按用户 SMTP 发信 | ✅ delivery_task、campaign_batch、smtp_config | ✅ 消费触发并生产发送任务 |
 | 追踪 | ✅ 像素、点击、统计、pixel/click 落库 | ✅ tracking_event | - |
 | 审计 | ✅ 写入、分页查询 | ✅ | - |
 

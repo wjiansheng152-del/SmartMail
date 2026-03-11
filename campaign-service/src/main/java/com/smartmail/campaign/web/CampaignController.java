@@ -21,13 +21,21 @@ public class CampaignController {
 
     private final CampaignService campaignService;
 
-    /** 创建活动，自动设置 createTime、updateTime，status 默认 draft */
+    /** 创建活动，自动设置 createTime、updateTime、createdBy（来自 X-User-Id），status 默认 draft */
     @PostMapping
-    public Result<Campaign> create(@RequestBody Campaign campaign) {
+    public Result<Campaign> create(
+            @RequestHeader(value = "X-User-Id", required = false) String userIdStr,
+            @RequestBody Campaign campaign) {
         campaign.setCreateTime(LocalDateTime.now());
         campaign.setUpdateTime(LocalDateTime.now());
         if (campaign.getStatus() == null) {
             campaign.setStatus("draft");
+        }
+        if (userIdStr != null && !userIdStr.isBlank()) {
+            try {
+                campaign.setCreatedBy(Long.parseLong(userIdStr.trim()));
+            } catch (NumberFormatException ignored) {
+            }
         }
         campaignService.save(campaign);
         return Result.ok(campaign);
@@ -43,7 +51,7 @@ public class CampaignController {
         return Result.ok(c);
     }
 
-    /** 全量更新活动，不存在则 404 */
+    /** 全量更新活动，不存在则 404；createdBy 以原记录为准不随 Body 覆盖 */
     @PutMapping("/{id}")
     public Result<Campaign> update(@PathVariable Long id, @RequestBody Campaign campaign) {
         Campaign existing = campaignService.getById(id);
@@ -52,6 +60,7 @@ public class CampaignController {
         }
         campaign.setId(id);
         campaign.setCreateTime(existing.getCreateTime());
+        campaign.setCreatedBy(existing.getCreatedBy());
         campaign.setUpdateTime(LocalDateTime.now());
         campaignService.updateById(campaign);
         return Result.ok(campaignService.getById(id));

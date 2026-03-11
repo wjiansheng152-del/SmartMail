@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS campaign (
     name VARCHAR(128) NOT NULL COMMENT '活动名称',
     template_id BIGINT UNSIGNED NOT NULL COMMENT '模板id',
     group_id BIGINT UNSIGNED NOT NULL COMMENT '分组id',
+    created_by BIGINT UNSIGNED DEFAULT NULL COMMENT '创建人用户id',
     status VARCHAR(32) NOT NULL DEFAULT 'draft' COMMENT 'draft/scheduled/sending/done',
     ab_config VARCHAR(1000) DEFAULT NULL COMMENT 'A/B测试配置JSON',
     scheduled_at DATETIME DEFAULT NULL COMMENT '计划发送时间',
@@ -12,6 +13,7 @@ CREATE TABLE IF NOT EXISTS campaign (
     update_time DATETIME NOT NULL COMMENT '更新时间',
     PRIMARY KEY (id),
     KEY idx_status (status),
+    KEY idx_created_by (created_by),
     KEY idx_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='营销活动';
 

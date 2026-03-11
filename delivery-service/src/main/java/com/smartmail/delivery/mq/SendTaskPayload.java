@@ -18,4 +18,6 @@ public class SendTaskPayload {
     private String from;
     private String channel;
     private String tenantId;
+    /** 活动创建人 ID，用于按用户 SMTP 发信；有值则优先用该用户的 smtp_config，否则用默认通道 */
+    private Long smtpConfigUserId;
 }

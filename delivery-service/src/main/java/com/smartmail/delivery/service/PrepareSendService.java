@@ -14,6 +14,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -49,12 +53,20 @@ public class PrepareSendService {
         TenantContext.setTenantId(tenantId != null ? tenantId : "default");
         try {
             Map<String, Object> campaign = downstreamClient.getCampaign(campaignId, tenantId);
-            if (campaign == null || campaign.get("data") == null) {
+            boolean campaignNull = (campaign == null || campaign.get("data") == null);
+            // #region agent log
+            try {
+                String line = "{\"hypothesisId\":\"C\",\"message\":\"after getCampaign\",\"data\":{\"campaignId\":" + campaignId + ",\"campaignNull\":" + campaignNull + "},\"timestamp\":" + System.currentTimeMillis() + "}";
+                Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e) { /* ignore */ }
+            // #endregion
+            if (campaignNull) {
                 log.warn("Campaign not found: campaignId={}", campaignId);
                 return;
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> c = (Map<String, Object>) campaign.get("data");
+            Long createdBy = longFrom(c.get("createdBy"));
             Object templateIdObj = c.get("templateId");
             Object groupIdObj = c.get("groupId");
             if (templateIdObj == null || groupIdObj == null) {
@@ -65,7 +77,14 @@ public class PrepareSendService {
             Long groupId = longFrom(groupIdObj);
 
             Map<String, Object> templateRes = downstreamClient.getTemplate(templateId, tenantId);
-            if (templateRes == null || templateRes.get("data") == null) {
+            boolean templateNull = (templateRes == null || templateRes.get("data") == null);
+            // #region agent log
+            try {
+                String line = "{\"hypothesisId\":\"C\",\"message\":\"after getTemplate\",\"data\":{\"campaignId\":" + campaignId + ",\"templateId\":" + templateId + ",\"templateNull\":" + templateNull + "},\"timestamp\":" + System.currentTimeMillis() + "}";
+                Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e) { /* ignore */ }
+            // #endregion
+            if (templateNull) {
                 log.warn("Template not found: templateId={}", templateId);
                 return;
             }
@@ -83,6 +102,12 @@ public class PrepareSendService {
             List<Map<String, Object>> contacts = downstreamClient.getContactsByGroup(groupId, tenantId);
             Set<String> blacklist = downstreamClient.getBlacklistEmails(tenantId).stream().collect(Collectors.toSet());
             Set<String> unsubscribed = downstreamClient.getUnsubscribeEmails(tenantId).stream().collect(Collectors.toSet());
+            // #region agent log
+            try {
+                String line = "{\"hypothesisId\":\"D\",\"message\":\"after getContactsByGroup\",\"data\":{\"campaignId\":" + campaignId + ",\"groupId\":" + groupId + ",\"contactsSize\":" + (contacts != null ? contacts.size() : -1) + "},\"timestamp\":" + System.currentTimeMillis() + "}";
+                Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e) { /* ignore */ }
+            // #endregion
 
             List<Map<String, Object>> toSend = contacts.stream()
                     .filter(m -> {
@@ -91,6 +116,12 @@ public class PrepareSendService {
                     })
                     .toList();
 
+            // #region agent log
+            try {
+                String line = "{\"hypothesisId\":\"E\",\"message\":\"after filter\",\"data\":{\"campaignId\":" + campaignId + ",\"toSendSize\":" + toSend.size() + "},\"timestamp\":" + System.currentTimeMillis() + "}";
+                Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e) { /* ignore */ }
+            // #endregion
             if (toSend.isEmpty()) {
                 log.info("No contacts to send after filter: campaignId={}", campaignId);
                 return;
@@ -137,6 +168,7 @@ public class PrepareSendService {
                 payload.setFrom(defaultFrom);
                 payload.setChannel("smtp");
                 payload.setTenantId(tenantId);
+                payload.setSmtpConfigUserId(createdBy);
                 rabbitTemplate.convertAndSend(sendExchange, sendRoutingKey, payload);
             }
             log.info("Enqueued {} send tasks for campaignId={}, batchId={}", toSend.size(), campaignId, batchId);

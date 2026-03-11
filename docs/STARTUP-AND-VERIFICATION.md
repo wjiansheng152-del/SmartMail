@@ -34,6 +34,7 @@
    - `tenant_default-scheduler.sql`  
    - `tenant_default-delivery.sql`  
    - `tenant_default-tracking.sql`  
+   - `tenant_default-smtp_config.sql`（发信设置页依赖）  
    - `tenant_default-abtest.sql`  
    - `tenant_default-unsubscribe-blacklist.sql`  
    - `tenant_default-audit.sql`  
@@ -161,6 +162,8 @@ curl -X GET "http://localhost:8080/api/contact/contact/page?page=1&size=20" \
 | tracking | GET | `/api/tracking/stats/1` | 活动 1 的打开/点击统计（campaignId=1） |
 | audit | GET | `/api/audit/log/list?page=1&size=20` | 审计日志分页 |
 | audit | POST | `/api/audit/log` | 写入审计，Body 示例：`{"userId":"1","action":"LOGIN","resource":"user","resourceId":"1","detail":"登录"}` |
+| delivery | GET | `/api/delivery/smtp-config` | 当前用户 SMTP 配置（需登录，网关会带 X-User-Id） |
+| delivery | PUT | `/api/delivery/smtp-config` | 保存当前用户 SMTP 配置 |
 
 PowerShell 示例（将 `<token>` 换成实际 accessToken）：
 
@@ -183,7 +186,57 @@ curl -X POST http://localhost:8080/api/iam/auth/refresh \
 
 应返回新的 accessToken 与 refreshToken。
 
-### 5. 单元/集成测试（可选）
+### 5. 验证真实 SMTP 发信
+
+发信链路：调度到点 → 投递 `smartmail.campaign.trigger` → delivery 的 `CampaignTriggerConsumer` 拉取活动/模板/分组联系人 → 创建批次与投递任务 → 投递 `smartmail.send.task` → `SendTaskConsumer` 按活动创建人（`createdBy`）取用户 SMTP 配置，有则用该配置发信，无则用默认通道（如 MailHog）发信。
+
+#### 方式 A：默认通道（MailHog）验证
+
+不配置用户 SMTP 时，发信走默认 `JavaMailSender`（Docker 下指向 MailHog）。用于验证「调度 → 触发 → 投递 → 发送」整条链路是否通畅。
+
+1. **前置条件**：MySQL 已执行全部租户建表（含 `tenant_default-smtp_config.sql`）；RabbitMQ、delivery、scheduler、contact、template、campaign、gateway、IAM 已启动；MailHog 已启动（Docker 下为 `mailhog` 容器，宿主机访问 Web UI：`http://localhost:8025`）。
+2. **准备数据**（以下均需带 `Authorization: Bearer <accessToken>`，先 POST `/api/iam/auth/login` 用 `admin` / `admin123` 取 token）：
+   - 创建 1 个模板：`POST /api/template/template`，Body 示例：`{"name":"验证发信","subject":"SMTP 验证邮件","bodyHtml":"<p>您好，这是一封验证邮件。</p>","variables":""}`，记下返回的 `data.id`（如 `templateId=1`）。
+   - 创建 1 个分组：`POST /api/contact/group`，Body：`{"name":"验证分组","ruleType":"static"}`，记下 `data.id`（如 `groupId=1`）。
+   - 创建 1 个联系人：`POST /api/contact/contact`，Body：`{"email":"test@example.com","name":"测试"}`，记下 `data.id`（如 `contactId=1`）。
+   - 将联系人加入分组（当前无 REST 接口，需在租户库执行 SQL，将 `<groupId>`、`<contactId>` 换成上面得到的 ID）：
+     ```sql
+     INSERT INTO tenant_default.contact_group_member (group_id, contact_id, create_time)
+     VALUES (<groupId>, <contactId>, NOW());
+     ```
+   - 创建活动：`POST /api/campaign/campaign`，Body：`{"name":"验证活动","templateId":1,"groupId":1,"status":"draft"}`（templateId/groupId 与上面一致），记下 `data.id`（如 `campaignId=1`）。注意：创建时请求头会带 X-User-Id（网关从 JWT 注入），活动 `createdBy` 即为当前用户（如 admin 的 id=1）；未配置该用户 SMTP 时，发信走默认通道。
+3. **创建发送计划**：`POST /api/scheduler/schedule`，Body 中 `runAt` 设为当前时间 1～2 分钟后（格式 `yyyy-MM-dd HH:mm:ss`），例如：`{"campaignId":1,"cronExpr":"","runAt":"2025-03-10 15:05:00"}`。
+4. **等待触发**：scheduler 每分钟扫描，到点后会将活动触发消息投递到 RabbitMQ，delivery 消费后生成发送任务并发送。等待约 2 分钟后：
+   - 打开 **MailHog Web UI**：`http://localhost:8025`，应能看到一封收件人为 `test@example.com` 的邮件（主题为「SMTP 验证邮件」）。
+   - 调用 **投递状态**：`GET /api/delivery/delivery/status/1`（campaignId=1），应看到 `total`、`sent` 等汇总（如 `sent >= 1` 表示成功）。
+5. **若未收到**：检查 scheduler 与 delivery 容器/进程日志（如 `docker logs smartmail-delivery-1 --tail 50`）；确认 RabbitMQ 队列 `smartmail.campaign.trigger`、`smartmail.send.task` 有被消费；确认 MailHog 端口 1025 在 delivery 侧可访问（Docker 下 host 为 `mailhog`）。**若专门验证 scheduler 在 Docker 内能否到点触发**，可参考 [SCHEDULER-DOCKER-TEST.md](./SCHEDULER-DOCKER-TEST.md)。
+
+#### 方式 B：用户 SMTP 配置（真实 SMTP）验证
+
+使用真实邮箱服务（如 QQ 邮箱、163、企业 SMTP）发信，验证「用户配置 SMTP → 按活动创建人发信」是否正常。
+
+1. **配置用户 SMTP**：登录后调用 `PUT /api/delivery/smtp-config`，Body 示例（按实际邮箱服务填写）：
+   ```json
+   {
+     "host": "smtp.qq.com",
+     "port": 465,
+     "username": "your-qq@qq.com",
+     "password": "授权码",
+     "fromEmail": "your-qq@qq.com",
+     "fromName": "SmartMail 测试",
+     "useSsl": true
+   }
+   ```
+   QQ 邮箱需在设置中开启 SMTP 并生成授权码；163 类似。生产环境务必配置 `app.smtp.encryption-key`（AES 密钥），密码会加密落库。
+2. **准备数据**：同方式 A（创建模板、分组、联系人、将联系人加入分组、创建活动）。创建活动时务必使用**已配置 SMTP 的同一用户**登录（即带该用户的 Token），这样活动的 `createdBy` 会对应到该用户，发信时才会使用其 SMTP 配置。
+3. **创建计划并等待**：同方式 A，`runAt` 设为 1～2 分钟后。
+4. **验证**：到**真实收件箱**（如 test@example.com 或您填写的联系人邮箱）查收；同时可查 `GET /api/delivery/delivery/status/{campaignId}` 与 delivery 日志确认发送结果。**使用 Postman 操作时**，可参考 [POSTMAN-SMTP-VERIFY.md](./POSTMAN-SMTP-VERIFY.md) 按步骤完成登录、配置 SMTP、创建模板/分组/联系人/活动/计划及查询投递状态。
+
+#### 一键验证脚本（方式 A，PowerShell）
+
+项目在 `docs/scripts/verify-smtp-send.ps1` 提供了脚本：登录 → 创建模板/分组/联系人 → 提示执行一条 SQL 将联系人加入分组 → 创建活动与计划（runAt=当前时间+2 分钟）→ 等待后查询投递状态并提示打开 MailHog。需在项目根目录、网关 8080 可用时执行；默认用户 `admin` / `admin123`。
+
+### 6. 单元/集成测试（可选）
 
 在项目根目录执行：
 
@@ -205,7 +258,8 @@ curl -X POST http://localhost:8080/api/iam/auth/refresh \
 
 - **登录 401**：检查 IAM 中配置的用户名/密码、以及网关路由是否把 `/api/iam/**` 指到 IAM 端口。  
 - **业务接口 401**：确认请求头为 `Authorization: Bearer <accessToken>`，且 Token 未过期。  
-- **404 / 连接被拒绝**：确认网关（8080）已启动，且对应后端服务已启动且路由 Path 与文档一致。  
+- **404 / 连接被拒绝**：确认网关（8080）已启动，且对应后端服务已启动且路由 Path 与文档一致。**发信设置页 404**：若 GET/PUT `/api/delivery/smtp-config` 返回 404，说明当前运行的 delivery-service 未包含 SMTP 配置接口。**Docker 部署**：须先在项目根目录执行 `.\mvnw.cmd package -pl delivery-service -am` 生成最新 JAR，再执行 `docker-compose build delivery` 和 `docker-compose up -d delivery`；**本地进程**：同样先执行上述 Maven 命令再重启 delivery 进程。  
+- **发信设置页 500**：若接口返回 500 且提示「smtp_config 表不存在」，请在租户库（如 `tenant_default`）中执行 `docs/sql/tenant_default-smtp_config.sql` 建表后重试。  
 - **数据库连接失败**：检查 MySQL 已启动、库与 schema 已创建、各服务配置的 URL/用户名/密码正确；Docker 内用服务名，本机用 localhost。  
 - **RabbitMQ / 投递不工作**：确认 RabbitMQ 已启动，delivery、scheduler 等配置的 host/port 正确，队列与交换机已由 RabbitConfig 等创建。  
 - **Docker 构建/拉取失败（failed to fetch oauth token、连接 auth.docker.io 超时）**：多为无法访问 Docker Hub。可先执行「不包含 frontend」的启动命令（见方式一上文）；若要完整构建，可配置 Docker 镜像加速：Docker Desktop → Settings → Docker Engine，在 JSON 中为 `registry-mirrors` 添加国内镜像（如 `https://docker.1ms.run` 等），保存后重试 `docker-compose up -d`。

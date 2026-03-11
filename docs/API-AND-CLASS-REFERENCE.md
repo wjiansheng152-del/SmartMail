@@ -96,6 +96,10 @@
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
 | GET | `/api/delivery/delivery/status/{campaignId}` | Path: campaignId | `Result<Map>`（含 campaignId, total, sent, failed） | 按 campaign_batch 汇总该活动的投递状态 |
+| GET | `/api/delivery/smtp-config` | 请求头：X-User-Id（由网关从 JWT 注入） | `Result<SmtpConfigDto>`，无配置时为 `Result<null>`；密码以占位 `****` 返回 | 查询当前登录用户在本租户下的 SMTP 配置 |
+| PUT | `/api/delivery/smtp-config` | 请求头：X-User-Id；Body：SmtpConfigDto（host, port, username, password 可选, fromEmail, fromName, useSsl） | `Result<SmtpConfigDto>` | 保存或更新当前用户的 SMTP 配置；password 留空或不传则不更新密码 |
+
+- **SmtpConfigDto**：host、port、username、password（PUT 时可选，不修改密码可不传）、fromEmail、fromName、useSsl（boolean）。密码入库前经 AES 加密，GET 不返回明文。
 
 ---
 
@@ -173,6 +177,7 @@
 2. **认证**：除登录、刷新外，请求头需带 `Authorization: Bearer <accessToken>`；网关校验通过后会将用户与租户信息通过请求头传给下游。  
 3. **租户**：若多租户，请求头可带 `X-Tenant-Id`（网关会从 JWT 中解析并传递），各业务服务按租户 Schema 隔离数据。  
 4. **日期时间**：接口规范要求为 `yyyy-MM-dd HH:mm:ss`（北京标准时间 UTC+8）。  
-5. **Content-Type**：请求与响应均为 `application/json`；追踪像素接口为 `image/gif`。
+5. **Content-Type**：请求与响应均为 `application/json`；追踪像素接口为 `image/gif`。  
+6. **用户 SMTP 密码加密**：delivery-service 中用户 SMTP 密码使用 `app.smtp.encryption-key` 配置项进行 AES 加密后落库。**生产环境必须配置该密钥**（建议 16 字节或 Base64 编码），并通过环境变量或配置中心注入，切勿提交到代码仓库。
 
 完成以上接口与类的实现即可满足“暴露方法与类”的文档化需求；具体字段以代码与建表 DDL 为准。

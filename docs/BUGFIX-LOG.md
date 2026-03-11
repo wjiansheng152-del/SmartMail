@@ -120,3 +120,94 @@ log.error("未捕获异常 path={} {}", request.getRequestURI(), ex.getMessage()
 - 所有需连 MySQL 的服务在 Docker 中应使用 **服务名**（如 `mysql`）且与 mysql 处于 **同一网络**（`networks: - smartmail`）。
 - 使用 Docker 时，业务服务通过 **SPRING_PROFILES_ACTIVE=docker** 或环境变量覆盖，确保 `base-url` 指向 `jdbc:mysql://mysql:3306`，密码与 compose 中 MySQL 一致（如 `root`）。
 - 租户库与表需先执行 `docs/sql/` 下脚本（如 `schema-tenant-default.sql`、`tenant_default-*.sql`），且 PowerShell 管道执行时加 `-Encoding UTF8`。
+
+---
+
+## 8. 发信设置页 404：delivery 镜像未包含 SMTP 配置接口
+
+**现象**：前端打开「发信设置」或保存 SMTP 配置时，接口返回 404，提示「获取配置失败」「保存失败」。
+
+**原因**：delivery-service 的 Dockerfile 仅 COPY 本地已编译的 JAR（`delivery-service/target/delivery-service-*.jar`）。若未先执行 `mvn package -pl delivery-service -am`，镜像使用的是旧 JAR，不包含新增的 `SmtpConfigController`（GET/PUT `/api/delivery/smtp-config`）。
+
+**修复**：Docker 部署 delivery 前，须在项目根目录先执行 `.\mvnw.cmd package -pl delivery-service -am` 生成最新 JAR，再执行 `docker-compose build delivery` 与 `docker-compose up -d delivery`。文档中已说明该顺序（STARTUP-AND-VERIFICATION.md「发信设置页 404」）。
+
+**涉及文件**：`docs/STARTUP-AND-VERIFICATION.md`、`delivery-service/Dockerfile`（注释中说明需先 mvn package）
+
+---
+
+## 9. common 模块缺少 slf4j 导致 delivery 编译失败
+
+**现象**：执行 `mvn package -pl delivery-service -am` 时，common 模块编译报错：`程序包 org.slf4j 不存在`、`找不到符号: 类 Logger`（GlobalExceptionHandler 使用 slf4j）。
+
+**原因**：common 的 `pom.xml` 未声明 `slf4j-api` 依赖，而 `GlobalExceptionHandler` 使用了 `Logger`/`LoggerFactory`。
+
+**修复**：在 `common/pom.xml` 的 `<dependencies>` 中增加：
+```xml
+<dependency>
+    <groupId>org.slf4j</groupId>
+    <artifactId>slf4j-api</artifactId>
+</dependency>
+```
+
+**涉及文件**：`common/pom.xml`
+
+---
+
+## 10. SmtpConfigController 中 logDebug 参数个数不匹配导致编译失败
+
+**现象**：delivery-service 编译报错：`无法将方法 logDebug 应用到给定类型; 需要: String,String,String,Object,String,Object 找到: String,String,String,String`。
+
+**原因**：调试用 `logDebug` 方法签名为 6 个参数（message, hypothesisId, k1, v1, k2, v2），其中一处调用（parseUserId missing）只传了 4 个参数。
+
+**修复**：为该调用补全后两个参数，例如 `logDebug("parseUserId missing", "H2", "reason", "userIdStr null or blank", "n/a", "");`。后续清理调试代码时已移除全部 logDebug 调用及方法本身。
+
+---
+
+## 11. 发信设置页 500：smtp_config 表不存在
+
+**现象**：执行 GET/PUT `/api/delivery/smtp-config` 返回 500，前端显示「服务器错误」。
+
+**原因**：租户库（如 `tenant_default`）中未执行 `tenant_default-smtp_config.sql`，表 `smtp_config` 不存在，Mapper 查询时抛出异常。
+
+**修复**：
+1. 在租户库中执行 `docs/sql/tenant_default-smtp_config.sql` 建表。Docker 下示例（PowerShell，UTF-8 避免中文乱码）：
+   ```powershell
+   $sql = [System.IO.File]::ReadAllText("$PWD\docs\sql\tenant_default-smtp_config.sql", [System.Text.Encoding]::UTF8)
+   $sql | docker-compose exec -T mysql mysql -uroot -proot tenant_default
+   ```
+2. SmtpConfigController 中对异常做捕获，若异常信息包含 "doesn't exist" 或 "smtp_config"，返回明确 errorInfo：「smtp_config 表不存在，请在租户库执行 docs/sql/tenant_default-smtp_config.sql」，便于前端展示。
+3. STARTUP-AND-VERIFICATION.md 中租户建表列表已加入 `tenant_default-smtp_config.sql`，常见问题中增加「发信设置页 500」说明。
+
+**涉及文件**：`delivery-service/.../SmtpConfigController.java`（mapToBizException）、`docs/STARTUP-AND-VERIFICATION.md`
+
+---
+
+## 12. 发信设置页 500：delivery 在 Docker 中未配置 MySQL 连接
+
+**现象**：建表后发信设置接口仍返回 500，后端日志或前端返回的错误信息为 `CannotGetJdbcConnectionException: Failed to obtain JDBC Connection`。
+
+**原因**：docker-compose 中 delivery 服务未配置租户数据源环境变量，运行时仍使用默认 `application.yml` 中的 `jdbc:mysql://localhost:3306`。在容器内 localhost 指向本容器，无法连接 MySQL 容器。
+
+**修复**：在 `docker-compose.yml` 的 delivery 服务下增加与 tracking、audit 等一致的 MySQL 配置，并依赖 mysql 健康后再启动：
+- 环境变量：`APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306`、`APP_TENANT_USERNAME: root`、`APP_TENANT_PASSWORD: root`
+- `depends_on`: 增加 `mysql: condition: service_healthy`
+
+**涉及文件**：`docker-compose.yml`
+
+---
+
+## 13. 创建活动时带 Token 但 created_by 仍为 NULL（已澄清）
+
+**现象**：POST 创建活动时请求头已带 `Authorization: Bearer <accessToken>`，但部分活动在库表 `campaign.created_by` 中为 NULL，导致发信走默认通道而非该用户的 SMTP。
+
+**原因**：经调试日志与库表核对，网关解析 JWT 的 userId、转发 X-User-Id、Campaign 接收并 setCreatedBy、以及 MyBatis-Plus 持久化均正常。**created_by 为 NULL 的记录来自未带 Token 的创建请求**（如早期用 Postman 未填 Authorization、或前端未传 Token）。带 Token 创建的活动（如 id 3、4）在库中 `created_by` 正确为 1。
+
+**结论与建议**：无需改业务代码。创建活动接口**必须带有效 Token**，网关才会注入 X-User-Id，Campaign 才会写入 created_by；未带或无效 Token 时 created_by 为空，发信会走默认通道。文档中已强调「创建活动需带 Token」。
+
+**涉及文件**：无代码修复；`docs/PROJECT-STATUS.md` 中项目状态已汇总；调试用 NDJSON 日志已从 `JwtAuthFilter`、`CampaignController` 中移除。
+
+---
+
+## 本次会话说明（用户网页配置 SMTP）
+
+第 8～12 条为实现「用户网页配置 SMTP」及 Docker 部署时遇到的问题与修复：支持每个登录用户在发信设置页配置自己的 SMTP，发送时按活动创建人使用其配置发信；建表、common 依赖、Controller 编译、租户库建表与 Docker 下 MySQL 连接均已补齐。第 13 条为 created_by 为 NULL 的排查结论（带 Token 即正常）。

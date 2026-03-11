@@ -17,6 +17,8 @@ public class Campaign {
     private String name;
     private Long templateId;
     private Long groupId;
+    /** 创建人用户 ID（平台 sys_user.id），发送时使用该用户的 SMTP 配置 */
+    private Long createdBy;
     private String status;
     private String abConfig;
     private LocalDateTime scheduledAt;

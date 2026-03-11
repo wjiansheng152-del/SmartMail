@@ -37,6 +37,10 @@
           <el-icon><List /></el-icon>
           <span>审计日志</span>
         </el-menu-item>
+        <el-menu-item index="/settings/smtp">
+          <el-icon><Setting /></el-icon>
+          <span>发信设置</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container direction="vertical">
@@ -76,6 +80,7 @@ import {
   DataAnalysis,
   List,
   ArrowDown,
+  Setting,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -96,6 +101,7 @@ const titleMap: Record<string, string> = {
   '/schedules': '定时发送',
   '/stats': '数据统计',
   '/audit': '审计日志',
+  '/settings/smtp': '发信设置',
 }
 const currentTitle = computed(() => titleMap[route.path] ?? 'SmartMail')
 

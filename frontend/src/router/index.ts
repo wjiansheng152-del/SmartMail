@@ -49,6 +49,11 @@ const router = createRouter({
           name: 'audit',
           component: () => import('@/views/AuditListView.vue'),
         },
+        {
+          path: 'settings/smtp',
+          name: 'smtp-settings',
+          component: () => import('@/views/SmtpConfigView.vue'),
+        },
       ],
     },
   ],

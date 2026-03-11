@@ -1,7 +1,6 @@
 package com.smartmail.gateway.config;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
@@ -64,7 +63,7 @@ public class JwtAuthFilter implements WebFilter {
                     .parseSignedClaims(token)
                     .getPayload();
 
-            final String userId = claims.get("userId", String.class);
+            String userId = claims.get("userId", String.class);
             String tenantIdVal = claims.get("tenantId", String.class);
             String username = claims.getSubject();
             final String tenantId = tenantIdVal != null ? tenantIdVal : "";
@@ -72,7 +71,7 @@ public class JwtAuthFilter implements WebFilter {
 
             ServerWebExchange mutated = exchange.mutate()
                     .request(r -> r.headers(h -> {
-                        h.set(HEADER_USER_ID, userId);
+                        h.set(HEADER_USER_ID, userId != null ? userId : "");
                         h.set(HEADER_TENANT_ID, tenantId);
                         h.set(HEADER_USERNAME, usernameVal);
                     }))

@@ -12,6 +12,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -44,6 +48,12 @@ public class ScheduleTriggerService {
         try {
             LocalDateTime now = LocalDateTime.now();
             List<ScheduleJob> due = scheduleJobMapper.selectPendingRunAt(now);
+            // #region agent log
+            try {
+                String line = "{\"hypothesisId\":\"A\",\"message\":\"scheduler due jobs\",\"data\":{\"dueCount\":" + due.size() + ",\"now\":\"" + now + "\"},\"timestamp\":" + System.currentTimeMillis() + "}";
+                Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e) { /* ignore */ }
+            // #endregion
             for (ScheduleJob job : due) {
                 try {
                     CampaignTriggerPayload payload = new CampaignTriggerPayload(
@@ -55,6 +65,12 @@ public class ScheduleTriggerService {
                     job.setStatus("running");
                     job.setUpdateTime(now);
                     scheduleJobMapper.updateById(job);
+                    // #region agent log
+                    try {
+                        String line = "{\"hypothesisId\":\"A\",\"message\":\"triggered\",\"data\":{\"scheduleId\":" + job.getId() + ",\"campaignId\":" + job.getCampaignId() + "},\"timestamp\":" + System.currentTimeMillis() + "}";
+                        Files.write(Path.of("/tmp/debug-7f1483.log"), (line + "\n").getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    } catch (Exception e) { /* ignore */ }
+                    // #endregion
                     log.info("Triggered schedule job id={}, campaignId={}", job.getId(), job.getCampaignId());
                 } catch (Exception e) {
                     log.warn("Failed to trigger schedule job id={}, campaignId={}", job.getId(), job.getCampaignId(), e);

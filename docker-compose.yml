@@ -155,8 +155,13 @@ services:
       - "8085:8085"
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      mysql:
         condition: service_healthy
     networks:
       - smartmail
@@ -171,7 +176,17 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_MAIL_HOST: mailhog
       SPRING_MAIL_PORT: 1025
+      APP_TENANT_BASE_URL: jdbc:mysql://mysql:3306
+      APP_TENANT_USERNAME: root
+      APP_TENANT_PASSWORD: root
+      # 容器内必须用服务名访问其他服务，不能用 localhost
+      APP_DOWNSTREAM_CONTACT_BASE_URL: http://contact:8082
+      APP_DOWNSTREAM_TEMPLATE_BASE_URL: http://template:8083
+      APP_DOWNSTREAM_CAMPAIGN_BASE_URL: http://campaign:8084
+      APP_DOWNSTREAM_TRACKING_BASE_URL: http://gateway:8080
     depends_on:
+      mysql:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     networks:

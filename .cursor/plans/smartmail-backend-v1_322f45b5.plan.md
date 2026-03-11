@@ -33,11 +33,7 @@ isProject: false
 
 ## 1) 当前基线与改造起点
 
-- 现状为单模块 Spring Boot 初始工程，关键入口文件：
-  - [server/pom.xml](server/pom.xml)
-  - [server/src/main/java/org/example/server/ServerApplication.java](server/src/main/java/org/example/server/ServerApplication.java)
-  - [server/src/main/resources/application.properties](server/src/main/resources/application.properties)
-- 先将现有 `server` 改造成 Maven 多模块父工程，保留 Java 17 + Spring Boot 3，并统一依赖/BOM 管理、代码规范与基础中间件配置。
+- 改造已完成：原单体脚手架目录 `server/` 已删除，项目现为 Maven 多模块结构（根目录 `pom.xml` + common、gateway-service、iam-service、contact-service、template-service、campaign-service、scheduler-service、delivery-service、tracking-service、audit-service），Java 17 + Spring Boot 3，统一依赖/BOM 与基础中间件配置。
 
 ## 2) 目标微服务划分（第一版）
 

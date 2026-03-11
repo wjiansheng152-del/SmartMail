@@ -43,6 +43,8 @@ app:
     routing-key: send.task
   default:
     from: noreply@smartmail.local
+  smtp:
+    encryption-key: ""
   channel:
     smtp:
       enabled: true
