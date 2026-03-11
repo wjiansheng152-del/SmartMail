@@ -47,6 +47,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useStore } from 'vuex'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import * as scheduleApi from '@/api/schedule'
@@ -59,6 +60,7 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const submitLoading = ref(false)
 const formRef = ref<FormInstance>()
+const store = useStore<{ user: { userId: number | null } }>()
 
 const form = ref({ campaignId: 0, cronExpr: '', runAt: '' })
 const formRules: FormRules = {
@@ -90,7 +92,13 @@ async function handleSubmit() {
     if (!valid) return
     submitLoading.value = true
     try {
-      await scheduleApi.createSchedule(form.value)
+      const campaign = campaignList.value.find((c) => c.id === form.value.campaignId)
+      await scheduleApi.createSchedule({
+        campaignId: form.value.campaignId,
+        createdBy: campaign?.createdBy ?? store.state.user.userId ?? undefined,
+        cronExpr: form.value.cronExpr || undefined,
+        runAt: form.value.runAt || undefined,
+      })
       ElMessage.success('计划已创建')
       dialogVisible.value = false
       loadSchedules()

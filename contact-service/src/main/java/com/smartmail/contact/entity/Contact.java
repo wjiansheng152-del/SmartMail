@@ -21,7 +21,11 @@ public class Contact {
     /** 主键，自增 */
     @TableId(type = IdType.AUTO)
     private Long id;
-    /** 邮箱，唯一，必填 */
+    /** 租户标识，与 TenantContext 一致，用于多租户数据隔离 */
+    private String tenantId;
+    /** 租户内序号，从 1 连续，删除后可复用，与 tenant_id 唯一 */
+    private Integer localId;
+    /** 邮箱，同一租户内唯一，必填 */
     private String email;
     /** 姓名 */
     private String name;

@@ -37,6 +37,7 @@ public class CampaignTriggerConsumer {
         try {
             prepareSendService.prepareAndEnqueue(
                     payload.getCampaignId(),
+                    payload.getCreatedBy(),
                     payload.getTenantId(),
                     payload.getScheduleId()
             );

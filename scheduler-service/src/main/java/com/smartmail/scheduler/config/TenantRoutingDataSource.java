@@ -4,7 +4,7 @@ import com.smartmail.common.tenant.TenantContext;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 
 /**
- * 按租户上下文路由到对应 Schema 数据源。
+ * 按租户上下文路由到对应 Schema 数据源。未配置的 tenantId 以 defaultTargetDataSource 回退（共享 tenant_default）。
  */
 public class TenantRoutingDataSource extends AbstractRoutingDataSource {
 

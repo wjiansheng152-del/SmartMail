@@ -18,8 +18,9 @@
 
 | 功能 | 说明 |
 |------|------|
-| 客户 CRUD | 创建、按 ID 查询、分页（支持按 groupId 过滤）、删除 |
+| 客户 CRUD | 创建、按 ID 查询、分页（支持按 groupId 过滤）、更新（PUT）、删除 |
 | 客户分组 | 创建、按 ID 查询、列表、删除（ContactGroup，ruleType 默认 static） |
+| 分组成员 | 将客户加入分组（单条/批量）、从分组移出客户（单条/批量）；ContactGroupMember、ContactGroupMemberService |
 | 退订 | 添加退订邮箱（幂等）、检查是否已退订、GET /list 返回已退订邮箱列表（供发送前批量过滤） |
 | 黑名单 | 添加、检查、列表 |
 | 数据与多租户 | 租户数据源路由（TenantRoutingDataSource）；tenant_default 下 contact、contact_group、contact_group_member、tag、contact_tag、unsubscribe、blacklist 等表；MybatisPlusConfig 显式 Mapper 扫描 |
@@ -35,7 +36,7 @@
 
 | 功能 | 说明 |
 |------|------|
-| 活动管理 | 创建、按 ID 查询、列表；Campaign（name、templateId、groupId、status 默认 draft、**created_by** 来自 X-User-Id，供发信时按创建人取 SMTP） |
+| 活动管理 | 创建、按 ID 查询、列表、全量更新、删除；删除时应用层先删 campaign_ab_assignment 再删 campaign；Campaign（name、templateId、groupId、status 默认 draft、**created_by** 来自 X-User-Id，供发信时按创建人取 SMTP） |
 | A/B 测试 | AbTestService 解析 abConfig、分配 variant（CampaignAbAssignment）；campaign_ab_assignment 表 |
 | 数据 | 租户库 campaign、campaign_batch 表 |
 

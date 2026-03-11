@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.smartmail.scheduler.mapper.ScheduleJobMapper">
     <select id="selectPendingRunAt" resultType="com.smartmail.scheduler.entity.ScheduleJob">
-        SELECT id, campaign_id, cron_expr, run_at, status, create_time, update_time
+        SELECT id, campaign_id, created_by, local_id, cron_expr, run_at, status, create_time, update_time
         FROM schedule_job
         WHERE status = 'pending'
           AND run_at IS NOT NULL

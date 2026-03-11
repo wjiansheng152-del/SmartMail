@@ -12,8 +12,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CampaignTriggerPayload {
 
-    /** 活动 ID */
+    /** 活动 ID（campaign 的 local_id） */
     private Long campaignId;
+    /** 活动创建人用户 ID，delivery 请求 campaign 时传 X-User-Id */
+    private Long createdBy;
     /** 租户 ID，用于数据源与下游请求头 */
     private String tenantId;
     /** 计划 ID，便于更新 schedule_job 状态 */

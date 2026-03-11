@@ -39,6 +39,16 @@
    - `tenant_default-unsubscribe-blacklist.sql`  
    - `tenant_default-audit.sql`  
 
+3. **local_id 与 created_by 迁移**（若表已存在且需支持「对外 id 从 1 连续、按用户/租户隔离」）  
+   在对应租户 Schema 下按顺序执行（表必须先有基础结构）：  
+   - `tenant_default-contact-migration-local_id.sql`  
+   - `tenant_default-template-migration-local_id.sql`  
+   - `tenant_default-contact_group-migration-local_id.sql`  
+   - `tenant_default-campaign-migration-local_id.sql`  
+   - `tenant_default-scheduler-migration-created_by.sql`  
+   - `tenant_default-scheduler-migration-local_id.sql`  
+   未执行上述迁移时，客户/模板/分组/活动等接口可能报 500（Unknown column 'local_id'）。详见 BUGFIX-LOG.md 第 14 条。
+
 执行方式示例（请根据实际库名与 schema 调整）：
 
 ```bash
@@ -56,14 +66,24 @@ mysql -u root -p < docs/sql/schema-tenant-default.sql
 
 ### 方式一：Docker Compose（推荐）
 
-在项目根目录执行：
+**构建或启动前需先打包后端 JAR**（Dockerfile 从项目根目录复制各模块 `*-service/target/*.jar`，未打包会报 “no such file or directory”）：
+
+```bash
+# Windows
+.\mvnw.cmd clean package -DskipTests
+
+# Linux / macOS
+./mvnw clean package -DskipTests
+```
+
+然后在项目根目录执行：
 
 ```bash
 docker-compose up -d
 ```
 
 将启动：MySQL、Redis、RabbitMQ、MailHog，以及网关、IAM、contact、template、campaign、scheduler、delivery、tracking、audit 各服务。  
-首次会构建镜像，需保证各服务 Dockerfile 能从根目录正确构建（构建上下文为项目根目录）。
+首次会构建镜像，构建上下文为项目根目录。
 
 **端口一览**（宿主机）：
 

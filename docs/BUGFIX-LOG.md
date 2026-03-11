@@ -208,6 +208,58 @@ log.error("未捕获异常 path={} {}", request.getRequestURI(), ex.getMessage()
 
 ---
 
+## 14. 登录后客户/模板/分组/活动接口 500（Unknown column 'local_id'）
+
+**现象**：登录后访问客户、模板、分组、营销活动等接口返回 500，错误信息含 `Unknown column 'local_id'` 或类似列不存在。
+
+**原因**：业务已改为按 local_id 对外暴露 id，Mapper 查询/写入使用了 `local_id` 列，但租户库中对应表尚未执行 local_id 迁移脚本，表中无该列。
+
+**修复**：在租户库（如 tenant_default）中按顺序执行 docs/sql 下迁移脚本：`tenant_default-contact-migration-local_id.sql`、`tenant_default-template-migration-local_id.sql`、`tenant_default-contact_group-migration-local_id.sql`、`tenant_default-campaign-migration-local_id.sql`。执行完成后重启 contact-service、template-service、campaign-service（或重新部署）。
+
+**涉及文件**：无代码修改；`docs/sql/` 下上述迁移脚本；`docs/STARTUP-AND-VERIFICATION.md` 中补充迁移说明。
+
+---
+
+## 15. 加入分组返回 200 但分组内「当前成员」看不到该客户
+
+**现象**：调用「将客户加入分组」接口返回 200，但前端在分组「当前成员」列表或按该分组筛选客户时，看不到刚加入的客户。
+
+**原因**：加入分组时前端传的 groupId 为分组的 **local_id**，后端已按 local_id 解析并正确写入 contact_group_member。但客户分页接口在按 groupId 筛选时，误将 groupId 当作分组的**内部主键**查询 contact_group_member，导致查不到刚写入的记录（因表中存的是内部 group id）。
+
+**修复**：在 ContactServiceImpl.pageList 中，当 groupId != null 时，先通过 contactGroupService.getByLocalIdAndTenant(groupId, tenantId) 得到内部 group id，再调用 selectPageByGroupId(internalGroupId, tenantId)。与分组成员接口对 groupId 的约定一致（均为 local_id）。
+
+**涉及文件**：`contact-service/.../service/impl/ContactServiceImpl.java`
+
+---
+
+## 16. 立即发送/计划触发到错误活动（id 不一致）
+
+**现象**：前端对「活动 id=1」点击立即发送或创建计划并触发，实际投递使用的活动不是该条（如用了内部主键为 1 的另一条活动）。
+
+**原因**：对外展示的活动 id 为 **local_id**（按 created_by 从 1 连续），而 delivery 调用 campaign 的 GET 时未传用户信息，campaign 将路径中的 id 当作内部主键查询，导致 id 与 created_by 不对应。
+
+**修复**：1）schedule_job 表增加 created_by 字段，创建计划时写入；2）CampaignTriggerPayload 与调度触发链路传递 createdBy；3）PrepareSendService.prepareAndEnqueue(campaignId, createdBy, tenantId, scheduleId)，delivery 请求 campaign 时若 createdBy 非空则请求头带 X-User-Id；4）campaign 的 GET 在存在 X-User-Id 时按 getByLocalIdAndCreatedBy(campaignId, createdBy) 查询。前端创建计划时传 createdBy（如 row.createdBy ?? store.state.user.userId）。
+
+**涉及文件**：scheduler 表迁移、ScheduleJob/ScheduleCreateRequest、CampaignTriggerPayload、DownstreamClient.getCampaign、PrepareSendService；campaign-service CampaignController/ServiceImpl；前端 CampaignListView、ScheduleListView 与类型定义。
+
+---
+
+## 17. 定时发送下列表未按用户隔离、计划 ID 未从 1 开始
+
+**现象**：定时发送下列表展示所有用户的计划；计划 ID 显示为内部主键，不是「按用户从 1 开始」的序号。
+
+**原因**：列表接口未按 created_by 过滤；schedule_job 表无 local_id，创建与列表返回的是内部主键。
+
+**修复**：1）SchedulerController.list 读取请求头 X-User-Id，调用 scheduleJobService.listByCreatedBy(createdBy) 仅返回该用户计划；2）schedule_job 增加 local_id 列，迁移脚本按 created_by 分区赋序号，唯一键 uk_created_by_local_id；3）ScheduleJob 实体与 Service 创建时分配 nextLocalIdForCreatedBy，列表返回 ScheduleJobListItem，id 为 local_id；创建接口返回 id 为 local_id。
+
+**涉及文件**：`tenant_default-scheduler-migration-local_id.sql`、ScheduleJob、ScheduleJobService、SchedulerController、ScheduleJobListItem、ScheduleJobMapper.xml。
+
+---
+
 ## 本次会话说明（用户网页配置 SMTP）
 
 第 8～12 条为实现「用户网页配置 SMTP」及 Docker 部署时遇到的问题与修复：支持每个登录用户在发信设置页配置自己的 SMTP，发送时按活动创建人使用其配置发信；建表、common 依赖、Controller 编译、租户库建表与 Docker 下 MySQL 连接均已补齐。第 13 条为 created_by 为 NULL 的排查结论（带 Token 即正常）。
+
+## 本次会话说明（local_id、分组成员、调度与计划隔离）
+
+第 14～17 条为本会话中与 local_id、分组成员解析、调度投递 createdBy、定时发送按用户隔离及计划 ID（local_id）相关的 Bug 与修复。功能汇总见 PROJECT-STATUS.md「三、近期更新汇总」。

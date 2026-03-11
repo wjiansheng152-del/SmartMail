@@ -34,11 +34,11 @@ public class DownstreamClient {
     private final DownstreamServicesProperties props;
     private static final String HEADER_TENANT = "X-Tenant-Id";
 
-    /** 获取活动详情 */
+    /** 获取活动详情。createdBy 非空时带 X-User-Id，campaign 服务按 local_id 查询；否则按内部主键查询。 */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> getCampaign(Long campaignId, String tenantId) {
+    public Map<String, Object> getCampaign(Long campaignId, String tenantId, Long createdBy) {
         String url = props.getCampaignBaseUrl() + "/api/campaign/campaign/" + campaignId;
-        Map<String, Object> result = getWithTenant(url, tenantId, new ParameterizedTypeReference<Map<String, Object>>() {});
+        Map<String, Object> result = getWithTenantAndUser(url, tenantId, createdBy, new ParameterizedTypeReference<Map<String, Object>>() {});
         // #region agent log
         try {
             String esc = url.replace("\"", "\\\"");
@@ -124,8 +124,15 @@ public class DownstreamClient {
     }
 
     private <T> T getWithTenant(String url, String tenantId, ParameterizedTypeReference<T> typeRef) {
+        return getWithTenantAndUser(url, tenantId, null, typeRef);
+    }
+
+    private <T> T getWithTenantAndUser(String url, String tenantId, Long userId, ParameterizedTypeReference<T> typeRef) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_TENANT, tenantId != null ? tenantId : "default");
+        if (userId != null) {
+            headers.set("X-User-Id", String.valueOf(userId));
+        }
         HttpEntity<Void> entity = new HttpEntity<>(headers);
         try {
             ResponseEntity<T> res = restTemplate.exchange(url, HttpMethod.GET, entity, typeRef);

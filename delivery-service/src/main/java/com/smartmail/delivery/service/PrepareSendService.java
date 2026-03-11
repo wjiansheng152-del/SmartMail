@@ -47,12 +47,13 @@ public class PrepareSendService {
 
     /**
      * 处理活动触发：拉取活动、模板、分组联系人，过滤后创建批次与投递任务并投递 MQ。
+     * campaignId 为活动 local_id，createdBy 非空时请求 campaign 会带 X-User-Id 以按 local_id 查询。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void prepareAndEnqueue(Long campaignId, String tenantId, Long scheduleId) {
+    public void prepareAndEnqueue(Long campaignId, Long createdBy, String tenantId, Long scheduleId) {
         TenantContext.setTenantId(tenantId != null ? tenantId : "default");
         try {
-            Map<String, Object> campaign = downstreamClient.getCampaign(campaignId, tenantId);
+            Map<String, Object> campaign = downstreamClient.getCampaign(campaignId, tenantId, createdBy);
             boolean campaignNull = (campaign == null || campaign.get("data") == null);
             // #region agent log
             try {
@@ -66,7 +67,7 @@ public class PrepareSendService {
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> c = (Map<String, Object>) campaign.get("data");
-            Long createdBy = longFrom(c.get("createdBy"));
+            Long campaignCreatedBy = longFrom(c.get("createdBy"));
             Object templateIdObj = c.get("templateId");
             Object groupIdObj = c.get("groupId");
             if (templateIdObj == null || groupIdObj == null) {
@@ -168,7 +169,7 @@ public class PrepareSendService {
                 payload.setFrom(defaultFrom);
                 payload.setChannel("smtp");
                 payload.setTenantId(tenantId);
-                payload.setSmtpConfigUserId(createdBy);
+                payload.setSmtpConfigUserId(campaignCreatedBy);
                 rabbitTemplate.convertAndSend(sendExchange, sendRoutingKey, payload);
             }
             log.info("Enqueued {} send tasks for campaignId={}, batchId={}", toSend.size(), campaignId, batchId);

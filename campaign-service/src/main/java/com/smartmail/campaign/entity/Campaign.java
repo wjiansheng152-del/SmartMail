@@ -14,6 +14,8 @@ public class Campaign {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    /** 创建人维度内序号，从 1 连续，删除后可复用；唯一约束 (created_by, local_id) */
+    private Integer localId;
     private String name;
     private Long templateId;
     private Long groupId;

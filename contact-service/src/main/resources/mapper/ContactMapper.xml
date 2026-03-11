@@ -4,7 +4,7 @@
     <select id="selectPageByGroupId" resultType="com.smartmail.contact.entity.Contact">
         SELECT c.* FROM contact c
         INNER JOIN contact_group_member m ON c.id = m.contact_id
-        WHERE m.group_id = #{groupId}
+        WHERE m.group_id = #{groupId} AND c.tenant_id = #{tenantId}
         ORDER BY c.id DESC
     </select>
 </mapper>

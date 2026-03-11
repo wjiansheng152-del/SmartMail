@@ -12,7 +12,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 用户实体，存放于 platform 库/ schema（多租户路由实现前使用默认 schema）。
+ * 用户实体，存放于 platform 库/ schema。
+ * <p>
+ * 一租户一账号：tenant_id 唯一，保证每个租户仅有一条用户记录。
+ * </p>
  */
 @Getter
 @Setter
@@ -30,7 +33,8 @@ public class User {
     @Column(name = "password_hash", nullable = false, length = 256)
     private String passwordHash;
 
-    @Column(name = "tenant_id", length = 64)
+    /** 租户 ID，唯一约束实现一租户一账号 */
+    @Column(name = "tenant_id", length = 64, unique = true)
     private String tenantId;
 
     @Column(name = "create_time", nullable = false)

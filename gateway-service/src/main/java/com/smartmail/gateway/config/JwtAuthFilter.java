@@ -23,7 +23,7 @@ import javax.crypto.SecretKey;
  * 网关 JWT 认证过滤器：对除登录、刷新外的请求校验 Authorization: Bearer &lt;token&gt;，
  * 校验通过后将 userId、tenantId、username 写入请求头转发给下游，校验失败返回 401 JSON。
  * <p>
- * 放行路径：/api/iam/auth/login、/api/iam/auth/refresh；与 IAM 使用相同密钥（app.jwt.secret）。
+ * 放行路径：以 /api/iam/auth/ 为前缀的请求（登录、刷新、注册等）；与 IAM 使用相同密钥（app.jwt.secret）。
  * </p>
  */
 @Component
@@ -82,8 +82,15 @@ public class JwtAuthFilter implements WebFilter {
         }
     }
 
+    /**
+     * 认证相关路径免 Token：以 /api/iam/auth/ 或 /iam/auth/ 开头的请求均放行（登录、刷新、注册等）。
+     * 兼容可能被去掉 /api 前缀的 path。
+     */
     private boolean isAuthPath(String path) {
-        return "/api/iam/auth/login".equals(path) || "/api/iam/auth/refresh".equals(path);
+        if (path == null) {
+            return false;
+        }
+        return path.startsWith("/api/iam/auth/") || path.startsWith("/iam/auth/");
     }
 
     private Mono<Void> write401(ServerWebExchange exchange, String errorInfo) {

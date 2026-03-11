@@ -30,6 +30,34 @@ export function deleteContact(id: number) {
   return request.delete(`/contact/contact/${id}`)
 }
 
+/** 更新客户信息 */
+export function updateContact(
+  id: number,
+  data: { email: string; name?: string; mobile?: string }
+) {
+  return request.put<Contact>(`/contact/contact/${id}`, data)
+}
+
+/** 将客户加入分组（单条） */
+export function addMemberToGroup(groupId: number, contactId: number) {
+  return request.post(`/contact/group/${groupId}/member`, { contactId })
+}
+
+/** 批量将客户加入分组 */
+export function addMemberToGroupBatch(groupId: number, contactIds: number[]) {
+  return request.post(`/contact/group/${groupId}/member/batch`, { contactIds })
+}
+
+/** 从分组中移出客户 */
+export function removeMemberFromGroup(groupId: number, contactId: number) {
+  return request.delete(`/contact/group/${groupId}/member/${contactId}`)
+}
+
+/** 批量从分组中移出客户 */
+export function removeMemberFromGroupBatch(groupId: number, contactIds: number[]) {
+  return request.delete(`/contact/group/${groupId}/member/batch`, { data: { contactIds } })
+}
+
 /** 分组列表 */
 export function getGroupList() {
   return request.get<ContactGroup[]>('/contact/group/list')

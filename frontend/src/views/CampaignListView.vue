@@ -9,11 +9,12 @@
         <el-table-column prop="templateId" label="模板ID" width="90" />
         <el-table-column prop="groupId" label="分组ID" width="90" />
         <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="handleDetail(row)">详情</el-button>
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button link type="success" @click="handleSendNow(row)">立即发送</el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -74,6 +75,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useStore } from 'vuex'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as campaignApi from '@/api/campaign'
@@ -94,6 +96,7 @@ const currentCampaign = ref<Campaign | null>(null)
 const submitLoading = ref(false)
 const editId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
+const store = useStore<{ user: { userId: number | null } }>()
 
 const form = ref<Partial<Campaign>>({
   name: '',
@@ -170,9 +173,17 @@ async function handleSendNow(row: Campaign) {
   runAt.setMinutes(runAt.getMinutes() + 1)
   await scheduleApi.createSchedule({
     campaignId: row.id!,
+    createdBy: row.createdBy ?? store.state.user.userId ?? undefined,
     runAt: formatRunAt(runAt),
   })
   ElMessage.success('已创建发送计划，约 1 分钟后执行')
+}
+
+async function handleDelete(row: Campaign) {
+  await ElMessageBox.confirm('确定删除该营销活动？', '提示', { type: 'warning' })
+  await campaignApi.deleteCampaign(row.id!)
+  ElMessage.success('已删除')
+  loadList()
 }
 
 async function handleSubmit() {

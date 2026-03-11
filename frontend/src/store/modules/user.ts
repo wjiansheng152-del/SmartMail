@@ -104,11 +104,11 @@ export const user = {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
       })
-      // 网关会在 JWT 中解析出 userId、username、tenantId，这里先占位，可选：登录接口若返回用户信息则写入
+      // 使用登录接口返回的 userId、username、tenantId，区分不同用户与租户
       commit('SET_USER', {
-        userId: 0,
-        username: payload.username,
-        tenantId: 'default',
+        userId: data.userId ?? 0,
+        username: data.username ?? payload.username,
+        tenantId: data.tenantId ?? 'default',
       })
       return data
     },
@@ -126,6 +126,14 @@ export const user = {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
       })
+      // 刷新后同步用户信息，与登录保持一致
+      if (data.userId != null || data.username != null || data.tenantId != null) {
+        commit('SET_USER', {
+          userId: data.userId ?? state.userId ?? 0,
+          username: data.username ?? state.username,
+          tenantId: data.tenantId ?? state.tenantId,
+        })
+      }
     },
     logout({ commit }: { commit: (type: string) => void }) {
       commit('LOGOUT')

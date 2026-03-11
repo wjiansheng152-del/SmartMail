@@ -29,15 +29,24 @@ export interface LoginRequest {
   password: string
 }
 
+/** 注册请求（用户名 1~64 字符，密码至少 6 位） */
+export interface RegisterRequest {
+  username: string
+  password: string
+}
+
 /** 刷新 Token 请求 */
 export interface RefreshRequest {
   refreshToken: string
 }
 
-/** Token 响应 */
+/** Token 响应（含当前用户信息，登录/刷新后写入 store 以区分用户与租户） */
 export interface TokenResponse {
   accessToken: string
   refreshToken: string
   accessExpiresIn: number
   refreshExpiresIn: number
+  userId?: number
+  username?: string
+  tenantId?: string
 }

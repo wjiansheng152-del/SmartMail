@@ -8,5 +8,5 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ContactMapper extends BaseMapper<Contact> {
 
-    IPage<Contact> selectPageByGroupId(Page<Contact> page, @Param("groupId") Long groupId);
+    IPage<Contact> selectPageByGroupId(Page<Contact> page, @Param("groupId") Long groupId, @Param("tenantId") String tenantId);
 }

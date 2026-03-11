@@ -20,3 +20,8 @@ export function createCampaign(data: Partial<Campaign>) {
 export function updateCampaign(id: number, data: Partial<Campaign>) {
   return request.put<Campaign>(`/campaign/campaign/${id}`, data)
 }
+
+/** 删除营销活动 */
+export function deleteCampaign(id: number) {
+  return request.delete(`/campaign/campaign/${id}`)
+}

@@ -4,6 +4,19 @@
 
 ---
 
+## ID 映射与参数说明（必读）
+
+| 场景 | 需要的 ID 类型 | 说明 |
+|------|----------------|------|
+| 创建活动 Body 的 `templateId`、`groupId` | **local_id** | 即步骤 3、4 返回的 `data.id`（租户内从 1 连续）。 |
+| 创建活动响应 `data.id`（campaignId） | **local_id** | 步骤 8、9 的 campaignId 即此值。 |
+| 创建计划 Body 的 `campaignId` | **local_id** | 即步骤 7 返回的 `data.id`。 |
+| 创建计划 Body 的 `createdBy` | **用户 ID** | 当前登录用户的主键（如 admin 为 `1`），必填，否则投递可能触发错误活动。 |
+| 查投递状态 URL 的 campaignId | **local_id** | 与步骤 7 的 id 一致。 |
+| **contact_group_member 表**的 `group_id`、`contact_id` | **内部主键** | 表中存的是库表主键 id，**不是** API 返回的 local_id。若步骤 4、5 创建的是该租户下第一个分组和第一个联系人，内部 id 通常为 1，故 `VALUES (1,1,...)` 可行；否则需查 `contact_group.id`、`contact.id` 再插入。 |
+
+---
+
 ## 一、前置条件
 
 - 网关、IAM、contact、template、campaign、scheduler、delivery、MySQL、RabbitMQ 已启动；
@@ -122,7 +135,7 @@ if (json.data && json.data.accessToken) {
 }
 ```
 
-**记下响应里的 `data.id`**，例如 `1`，后面作为 **templateId**。
+**记下响应里的 `data.id`**（模板的 **local_id**，例如 `1`），后面作为 **templateId**。
 
 ---
 
@@ -140,7 +153,7 @@ if (json.data && json.data.accessToken) {
 }
 ```
 
-**记下响应里的 `data.id`**，例如 `1`，作为 **groupId**。
+**记下响应里的 `data.id`**（分组的 **local_id**，例如 `1`），作为 **groupId**。
 
 ---
 
@@ -158,14 +171,36 @@ if (json.data && json.data.accessToken) {
 }
 ```
 
-**记下响应里的 `data.id`**，作为 **contactId**。  
+**记下响应里的 `data.id`**（联系人的 **local_id**），作为 **contactId**。  
 **重要**：真实 SMTP 验证时，这里填的邮箱必须是你**能登录查看的邮箱**，否则无法确认是否收到。
 
 ---
 
-### 步骤 6：将联系人加入分组（执行 SQL）
+### 步骤 6：将联系人加入分组
 
-当前没有「添加成员到分组」的 REST 接口，需要在数据库执行一条 SQL（把下面的 `groupId`、`contactId` 换成你在步骤 4、5 记下的 ID）：
+**推荐方式：使用 REST 接口**
+
+- 单个加入分组：`POST /api/contact/group/{groupId}/member`  
+  - Path `groupId`：分组的 **local_id**（步骤 4 返回的 `data.id`）  
+  - Body：`{ "contactId": <联系人的 local_id> }`（步骤 5 返回的 `data.id`）
+- 批量加入分组：`POST /api/contact/group/{groupId}/member/batch`  
+  - Path `groupId`：分组 **local_id**  
+  - Body：`{ "contactIds": [ <contact 的 local_id 列表> ] }`
+
+上述接口会由后端自动用 local_id 解析出内部主键并写入 `contact_group_member` 表，正常联调推荐**优先使用接口方式**。
+
+**备选方式：直接执行 SQL 造数**
+
+在少数需要直接在数据库造数或排查时，可以执行一条 SQL。**注意**：`contact_group_member` 表的 `group_id`、`contact_id` 存的是**内部主键**（见上文「ID 映射与参数说明」），不是步骤 4、5 记下的 local_id。若步骤 4、5 创建的是该租户下**第一个**分组和**第一个**联系人，内部主键通常为 1，故下面 `VALUES (1, 1, NOW())` 可行；否则需先查表得到内部 id 再插入：
+
+```sql
+-- 查分组的内部主键（将 1 换成步骤 4 的 local_id）
+SELECT id FROM tenant_default.contact_group WHERE local_id = 1 LIMIT 1;
+-- 查联系人的内部主键（将 1 换成步骤 5 的 local_id）
+SELECT id FROM tenant_default.contact WHERE local_id = 1 LIMIT 1;
+```
+
+插入（把 `1, 1` 换成上面查到的**内部主键**）：
 
 ```sql
 INSERT INTO tenant_default.contact_group_member (group_id, contact_id, create_time)
@@ -186,8 +221,8 @@ docker exec -i smartmail-mysql-1 mysql -uroot -proot -e "INSERT INTO tenant_defa
 
 - **Method**：`POST`
 - **URL**：`{{baseUrl}}/api/campaign/campaign`
-- **Headers**：同上（**必须带步骤 1 同一用户的 Token**，这样活动的 `createdBy` 才会对应用户，发信时才会用你在步骤 2 配置的 SMTP）
-- **Body**：**raw** → **JSON**（把 `templateId`、`groupId` 换成 3、4 步的 id）：
+- **Headers**：同上（**必须带步骤 1 同一用户的 Token**，这样活动的 `created_by` 才会对应用户，发信时才会用你在步骤 2 配置的 SMTP）
+- **Body**：**raw** → **JSON**（`templateId`、`groupId` 填步骤 3、4 返回的 **local_id**）：
 
 ```json
 {
@@ -198,7 +233,7 @@ docker exec -i smartmail-mysql-1 mysql -uroot -proot -e "INSERT INTO tenant_defa
 }
 ```
 
-**记下响应里的 `data.id`**，作为 **campaignId**（例如 `1`）。
+**记下响应里的 `data.id`**（活动的 **local_id**），作为 **campaignId**（例如 `1`）。
 
 ---
 
@@ -207,7 +242,7 @@ docker exec -i smartmail-mysql-1 mysql -uroot -proot -e "INSERT INTO tenant_defa
 - **Method**：`POST`
 - **URL**：`{{baseUrl}}/api/scheduler/schedule`
 - **Headers**：同上
-- **Body**：**raw** → **JSON**（把 `campaignId` 换成步骤 7 的 id；**runAt 必须填 UTC 时间**，见下）。
+- **Body**：**raw** → **JSON**（**campaignId** 填步骤 7 的 id（活动 **local_id**）；**createdBy** 填当前用户 ID，如 admin 为 `1`，必填；**runAt 必须填 UTC 时间**，见下）。
 
 **重要：runAt 必须使用 UTC，不能填本地时间。** 调度容器内使用 UTC，若填北京时间等，计划会一直被当成“未到点”而从不触发。
 
@@ -219,11 +254,12 @@ docker exec smartmail-scheduler-1 date
 ```json
 {
   "campaignId": 1,
+  "createdBy": 1,
   "cronExpr": "",
   "runAt": "2026-03-10 07:41:00"
 }
 ```
-**响应**：200 且返回 `data` 为数字表示计划 ID，创建成功。  
+**响应**：200 且返回 `data` 为数字（计划 **local_id**）表示创建成功。  
 调度服务每分钟扫描，到点后会自动触发该活动并发信。
 
 ---
@@ -231,7 +267,7 @@ docker exec smartmail-scheduler-1 date
 ### 步骤 9：等待约 2 分钟后查投递状态
 
 - **Method**：`GET`
-- **URL**：`{{baseUrl}}/api/delivery/delivery/status/1`（把最后的 `1` 换成你的 **campaignId**）
+- **URL**：`{{baseUrl}}/api/delivery/delivery/status/<campaignId>`（**campaignId** 为步骤 7 返回的活动 **local_id**，例如 `1`）
 - **Headers**：`Authorization: Bearer {{token}}`（无需 Body）
 
 **响应示例**：`{ "data": { "campaignId": 1, "total": 1, "sent": 1, "failed": 0 } }`  

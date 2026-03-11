@@ -18,8 +18,12 @@ public class ScheduleJob {
     /** 主键 */
     @TableId(type = IdType.AUTO)
     private Long id;
-    /** 活动 ID */
+    /** 活动 ID（为 campaign 的 local_id，非内部主键） */
     private Long campaignId;
+    /** 活动创建人用户 ID，投递时用于 X-User-Id 以便按 local_id 查询活动 */
+    private Long createdBy;
+    /** 创建人维度内序号，从 1 连续，删除后可复用；唯一约束 (created_by, local_id) */
+    private Integer localId;
     /** Cron 表达式，与 runAt 二选一 */
     private String cronExpr;
     /** 单次执行时间，与 cronExpr 二选一 */

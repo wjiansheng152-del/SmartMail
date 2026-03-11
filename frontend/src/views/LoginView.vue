@@ -44,25 +44,38 @@
           </el-button>
         </el-form-item>
       </el-form>
+      <p v-if="successMsg" class="success-msg">{{ successMsg }}</p>
       <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
+      <p class="footer-link">
+        <router-link to="/register">没有账号？去注册</router-link>
+      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { reactive, ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { User, Lock } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import type { LoginRequest } from '@/types/api'
 
 const router = useRouter()
+const route = useRoute()
 const store = useStore<{ user: { accessToken: string } }>()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const errorMsg = ref('')
+const successMsg = ref('')
+
+onMounted(() => {
+  if (route.query.registered === '1') {
+    successMsg.value = '注册成功，请登录'
+    router.replace({ path: '/login' }).catch(() => {})
+  }
+})
 
 const form = reactive<LoginRequest>({
   username: '',
@@ -126,10 +139,28 @@ async function handleLogin() {
 .submit-btn {
   width: 100%;
 }
+.success-msg {
+  margin: 12px 0 0;
+  color: var(--el-color-success);
+  font-size: 13px;
+  text-align: center;
+}
 .error-msg {
   margin: 12px 0 0;
   color: var(--el-color-danger);
   font-size: 13px;
   text-align: center;
+}
+.footer-link {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 14px;
+}
+.footer-link a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.footer-link a:hover {
+  text-decoration: underline;
 }
 </style>

@@ -58,6 +58,7 @@ public class ScheduleTriggerService {
                 try {
                     CampaignTriggerPayload payload = new CampaignTriggerPayload(
                             job.getCampaignId(),
+                            job.getCreatedBy(),
                             DEFAULT_TENANT,
                             job.getId()
                     );

@@ -20,6 +20,13 @@ export interface ContactCreateRequest {
   mobile?: string
 }
 
+/** 更新客户请求（与后端 PUT 体一致） */
+export interface ContactUpdateRequest {
+  email: string
+  name?: string
+  mobile?: string
+}
+
 /** 客户分组 */
 export interface ContactGroup {
   id: number
@@ -48,6 +55,7 @@ export interface Campaign {
   name: string
   templateId: number
   groupId: number
+  createdBy?: number
   status?: string
   abConfig?: string
   scheduledAt?: string
@@ -55,9 +63,10 @@ export interface Campaign {
   updateTime?: string
 }
 
-/** 调度创建请求 */
+/** 调度创建请求（campaignId 为活动 local_id，createdBy 为活动创建人，供投递时按 local_id 查活动） */
 export interface ScheduleCreateRequest {
   campaignId: number
+  createdBy?: number
   cronExpr?: string
   runAt?: string
 }

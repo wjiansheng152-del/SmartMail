@@ -24,22 +24,28 @@
 
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
-| POST | `/api/contact/contact` | Body: `ContactCreateRequest` | `Result<Contact>` | 新建客户，邮箱必填且唯一，姓名、手机可选 |
-| GET | `/api/contact/contact/{id}` | Path: id | `Result<Contact>` | 按 ID 查询客户，不存在 404 |
-| GET | `/api/contact/contact/page` | Query: page=1, size=20, groupId? | `Result<IPage<Contact>>` | 分页查询客户，groupId 可选，按分组过滤 |
-| DELETE | `/api/contact/contact/{id}` | Path: id | `Result<Void>` | 按 ID 删除客户，幂等 |
+| POST | `/api/contact/contact` | Body: `ContactCreateRequest` | `Result<Contact>` | 新建客户，邮箱必填且唯一，姓名、手机可选；返回 **id 为 local_id** |
+| GET | `/api/contact/contact/{id}` | Path: id | `Result<Contact>` | 按 ID 查询客户，**id 为 contact 的 local_id**（租户内从 1 连续），不存在 404 |
+| PUT | `/api/contact/contact/{id}` | Path: id + Body: `ContactUpdateRequest` | `Result<Contact>` | 更新客户，**路径 id 为 local_id**；email 必填，name/mobile 可选；邮箱冲突 409 |
+| GET | `/api/contact/contact/page` | Query: page=1, size=20, groupId? | `Result<IPage<Contact>>` | 分页查询客户，**id 与 groupId 均为 local_id**；groupId 表示分组的 local_id，后端按之解析再按分组过滤 |
+| DELETE | `/api/contact/contact/{id}` | Path: id | `Result<Void>` | 按 ID 删除客户，**路径 id 为 local_id**，幂等 |
 
 - **ContactCreateRequest**：email（必填、邮箱格式）、name、mobile  
-- **Contact**：id、email、name、mobile、createTime、updateTime  
+- **ContactUpdateRequest**：email（必填、邮箱格式）、name、mobile  
+- **Contact**：id（local_id）、email、name、mobile、createTime、updateTime  
 
 #### 客户分组（group）
 
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
 | POST | `/api/contact/group` | Body: `ContactGroup`（name、ruleType 等） | `Result<ContactGroup>` | 创建分组，ruleType 默认 static |
-| GET | `/api/contact/group/{id}` | Path: id | `Result<ContactGroup>` | 按 ID 查询分组，不存在 404 |
+| GET | `/api/contact/group/{id}` | Path: id | `Result<ContactGroup>` | 按 ID 查询分组，**id 为分组的 local_id**，不存在 404 |
 | GET | `/api/contact/group/list` | - | `Result<List<ContactGroup>>` | 当前租户下全部分组列表 |
-| DELETE | `/api/contact/group/{id}` | Path: id | `Result<Void>` | 按 ID 删除分组，幂等 |
+| POST | `/api/contact/group/{groupId}/member` | Path: groupId + Body: `{ contactId }` | `Result<Void>` | 将客户加入分组；**groupId、contactId 均为对应资源的 local_id**，幂等 |
+| POST | `/api/contact/group/{groupId}/member/batch` | Path: groupId + Body: `{ contactIds }` | `Result<Void>` | 批量将客户加入分组，同上 local_id 约定，幂等 |
+| DELETE | `/api/contact/group/{groupId}/member/{contactId}` | Path: groupId, contactId | `Result<Void>` | 从分组移出客户，**groupId、contactId 为 local_id**，幂等 |
+| DELETE | `/api/contact/group/{groupId}/member/batch` | Path: groupId + Body: `{ contactIds }` | `Result<Void>` | 批量从分组移出客户，同上，幂等 |
+| DELETE | `/api/contact/group/{id}` | Path: id | `Result<Void>` | 按 ID 删除分组，**id 为分组的 local_id**，幂等 |
 
 #### 退订（unsubscribe）
 
@@ -63,11 +69,11 @@
 
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
-| POST | `/api/template/template` | Body: `EmailTemplate` | `Result<EmailTemplate>` | 创建模板，自动 set createTime/updateTime，version 默认 1 |
-| GET | `/api/template/template/{id}` | Path: id | `Result<EmailTemplate>` | 按 ID 查询，不存在 404 |
-| GET | `/api/template/template/list` | - | `Result<List<EmailTemplate>>` | 当前租户全部模板 |
-| PUT | `/api/template/template/{id}` | Path: id + Body: `EmailTemplate` | `Result<EmailTemplate>` | 全量更新模板，不存在 404 |
-| DELETE | `/api/template/template/{id}` | Path: id | `Result<Void>` | 按 ID 删除模板，幂等 |
+| POST | `/api/template/template` | Body: `EmailTemplate` | `Result<EmailTemplate>` | 创建模板，自动 set createTime/updateTime，version 默认 1；返回 **id 为 local_id** |
+| GET | `/api/template/template/{id}` | Path: id | `Result<EmailTemplate>` | 按 ID 查询，**id 为模板的 local_id**（租户内），不存在 404 |
+| GET | `/api/template/template/list` | - | `Result<List<EmailTemplate>>` | 当前租户全部模板，每项 id 为 local_id |
+| PUT | `/api/template/template/{id}` | Path: id + Body: `EmailTemplate` | `Result<EmailTemplate>` | 全量更新模板，**路径 id 为 local_id**，不存在 404 |
+| DELETE | `/api/template/template/{id}` | Path: id | `Result<Void>` | 按 ID 删除模板，**路径 id 为 local_id**，幂等 |
 
 ---
 
@@ -75,10 +81,11 @@
 
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
-| POST | `/api/campaign/campaign` | Body: `Campaign` | `Result<Campaign>` | 创建活动，status 默认 draft |
-| GET | `/api/campaign/campaign/{id}` | Path: id | `Result<Campaign>` | 按 ID 查询，不存在 404 |
-| PUT | `/api/campaign/campaign/{id}` | Path: id + Body: `Campaign` | `Result<Campaign>` | 全量更新活动，不存在 404 |
-| GET | `/api/campaign/campaign/list` | - | `Result<List<Campaign>>` | 当前租户全部活动列表 |
+| POST | `/api/campaign/campaign` | Body: `Campaign` | `Result<Campaign>` | 创建活动，status 默认 draft；需带 Token，网关注入 X-User-Id 写入 created_by；返回 **id 为 local_id**（按 created_by 从 1 连续） |
+| GET | `/api/campaign/campaign/{id}` | Path: id | `Result<Campaign>` | 按 ID 查询，**id 为 campaign 的 local_id**。若请求头带 **X-User-Id**，则按 local_id + created_by 查询（投递触发用）；否则按主键查 |
+| PUT | `/api/campaign/campaign/{id}` | Path: id + Body: `Campaign` | `Result<Campaign>` | 全量更新活动，**路径 id 为 local_id**，不存在 404 |
+| DELETE | `/api/campaign/campaign/{id}` | Path: id | `Result<Void>` | 删除活动，**路径 id 为 local_id**，先删 campaign_ab_assignment 再删 campaign，幂等 |
+| GET | `/api/campaign/campaign/list` | - | `Result<List<Campaign>>` | 当前租户全部活动列表，每项 id 为 local_id |
 
 ---
 
@@ -86,8 +93,8 @@
 
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
-| POST | `/api/scheduler/schedule` | Body: ScheduleCreateRequest（campaignId, cronExpr, runAt） | `Result<Long>` | 创建发送计划并落库，返回计划 ID；runAt 格式 yyyy-MM-dd HH:mm:ss |
-| GET | `/api/scheduler/schedule/list` | - | `Result<List<ScheduleJob>>` | 当前租户下发送计划列表 |
+| POST | `/api/scheduler/schedule` | Body: ScheduleCreateRequest（**campaignId** 活动 local_id、**createdBy** 用户ID、cronExpr、runAt） | `Result<Long>` | 创建发送计划；**createdBy** 用于投递时按 local_id 查活动；返回 **计划 ID 为 local_id**（按 created_by 从 1 连续）；runAt 格式 yyyy-MM-dd HH:mm:ss |
+| GET | `/api/scheduler/schedule/list` | 请求头：X-User-Id（可选） | `Result<List<ScheduleJobListItem>>` | 若带 **X-User-Id** 仅返回该用户创建的计划；每项 **id 为计划的 local_id** |
 
 ---
 
@@ -178,6 +185,7 @@
 3. **租户**：若多租户，请求头可带 `X-Tenant-Id`（网关会从 JWT 中解析并传递），各业务服务按租户 Schema 隔离数据。  
 4. **日期时间**：接口规范要求为 `yyyy-MM-dd HH:mm:ss`（北京标准时间 UTC+8）。  
 5. **Content-Type**：请求与响应均为 `application/json`；追踪像素接口为 `image/gif`。  
-6. **用户 SMTP 密码加密**：delivery-service 中用户 SMTP 密码使用 `app.smtp.encryption-key` 配置项进行 AES 加密后落库。**生产环境必须配置该密钥**（建议 16 字节或 Base64 编码），并通过环境变量或配置中心注入，切勿提交到代码仓库。
+6. **对外 ID 与 local_id**：客户、模板、分组、营销活动、发送计划对外接口中的 **id** 均为 **local_id**（同一租户或同一用户下从 1 连续，删除后可复用）。路径参数与响应体中的 id 均指 local_id；分组成员接口的 groupId、contactId 也为对应资源的 local_id。创建计划时需传 **createdBy**（用户ID），以便投递时按 local_id + created_by 正确查询活动。  
+7. **用户 SMTP 密码加密**：delivery-service 中用户 SMTP 密码使用 `app.smtp.encryption-key` 配置项进行 AES 加密后落库。**生产环境必须配置该密钥**（建议 16 字节或 Base64 编码），并通过环境变量或配置中心注入，切勿提交到代码仓库。
 
 完成以上接口与类的实现即可满足“暴露方法与类”的文档化需求；具体字段以代码与建表 DDL 为准。
