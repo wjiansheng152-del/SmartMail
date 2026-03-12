@@ -85,6 +85,7 @@ import * as contactApi from '@/api/contact'
 import type { Campaign } from '@/types/entity'
 import type { EmailTemplate } from '@/types/entity'
 import type { ContactGroup } from '@/types/entity'
+import { formatUtcRunAtFromLocalDate } from '@/utils/datetime'
 
 const list = ref<Campaign[]>([])
 const templateList = ref<EmailTemplate[]>([])
@@ -152,17 +153,12 @@ function handleEdit(row: Campaign) {
   dialogVisible.value = true
 }
 
-/** 格式化为 yyyy-MM-dd HH:mm:ss（本地时间，与后端约定一致） */
-function formatRunAt(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  const h = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  const s = String(date.getSeconds()).padStart(2, '0')
-  return `${y}-${m}-${d} ${h}:${min}:${s}`
-}
-
+/**
+ * 处理「立即发送」：
+ * - 使用浏览器本地时间（例如北京时间）计算「当前时间 + 1 分钟」；
+ * - 提交给后端 scheduler 前，将本地时间转换为 UTC 字符串，
+ *   避免 Docker 中按 UTC 运行的调度服务出现 8 小时时差。
+ */
 async function handleSendNow(row: Campaign) {
   await ElMessageBox.confirm(
     '确定立即发送该活动？将创建一条约 1 分钟后执行的计划，由调度服务自动触发发送。',
@@ -174,7 +170,8 @@ async function handleSendNow(row: Campaign) {
   await scheduleApi.createSchedule({
     campaignId: row.id!,
     createdBy: row.createdBy ?? store.state.user.userId ?? undefined,
-    runAt: formatRunAt(runAt),
+    // 关键：将本地时间转换为 UTC 字符串再提交给后端
+    runAt: formatUtcRunAtFromLocalDate(runAt),
   })
   ElMessage.success('已创建发送计划，约 1 分钟后执行')
 }

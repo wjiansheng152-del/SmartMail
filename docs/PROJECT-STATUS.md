@@ -49,6 +49,15 @@
 
 以下为本次会话中完成的新增功能与修复，已纳入当前状态。
 
+### 本会话改动：IAM 持久化与登录
+
+| 改动 | 说明 |
+|------|------|
+| **IAM 连接 MySQL 持久化** | Docker 下 IAM 不再使用 H2 内存库，改为连接 MySQL 独立库 `iam`，用户（sys_user）与租户元数据（tenant_metadata）随 `mysql_data` 卷持久化；`docker-compose down` 后再 `up` 注册账号可继续登录。 |
+| **配置与建表** | 新增 `iam-service/src/main/resources/application-docker.yml`：数据源指向 `jdbc:mysql://mysql:3306/iam?createDatabaseIfNotExist=true&...`，JPA `ddl-auto: update` 自动建表；`docker-compose.yml` 中 IAM 的 `SPRING_DATASOURCE_*` 改为 MySQL（root/root）。 |
+| **登录启动顺序** | 曾出现「首次 `docker-compose up -d` 后立刻登录失败、多次 up 或等一会才正常」；根因为 IAM 启动时 MySQL 尚未完全就绪。在 `application-docker.yml` 中为 Hikari 增加 `connection-timeout: 60000`（60 秒），启动阶段有更长时间等待 MySQL，减少该现象。 |
+| **调试代码** | 为排查登录故障曾加入的 DebugLog 及 AuthController/UserDetailsServiceImpl/DataInitializer 中的调试日志已全部移除，仅保留上述配置改动。 |
+
 ### 新增功能
 
 | 领域 | 功能 | 说明 |
@@ -67,6 +76,7 @@
 | 登录后客户/模板/分组/活动接口 500 | 数据库未执行 local_id 迁移，SQL 查不到 local_id 列 | 按顺序执行 docs/sql 下 contact、template、contact_group、campaign 的 local_id 迁移脚本并重启服务。 |
 | 加入分组返回 200 但分组内看不到该客户 | 客户分页按分组筛选时，前端传的 groupId 为分组的 local_id，后端误当内部主键查询 | ContactServiceImpl.pageList 中先将 groupId（local_id）解析为内部 group id，再调用 selectPageByGroupId。 |
 | 立即发送/计划触发到错误活动 | delivery 调 campaign 未带 X-User-Id，campaign 将路径 id 当内部主键查 | schedule_job 增加 created_by；触发 payload 与 delivery 传 createdBy；DownstreamClient.getCampaign 带 X-User-Id。 |
+| 立即发送长时间不触发、投递 total 不变化 | 前端「立即发送」和「创建计划」直接使用本地时间作为 runAt，Docker 中 scheduler 按 UTC 比较，导致出现 8 小时偏差 | 新增前端时间工具模块，创建计划/立即发送时将本地时间统一转换为 UTC 字符串提交给后端；调度计划列表展示时将后端 UTC 时间转换为本地时间显示；文档中明确区分「前端界面自动换算」与「Postman 直接调用需传 UTC」两种场景。 |
 | 定时发送下列表未按用户隔离 | 调度列表接口返回全量计划 | SchedulerController.list 读取 X-User-Id，ScheduleJobService.listByCreatedBy(createdBy) 按 created_by 过滤。 |
 
 ### 数据库迁移脚本（local_id / created_by）

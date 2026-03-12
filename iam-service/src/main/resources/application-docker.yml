@@ -1,0 +1,16 @@
+# Docker 环境下 IAM 使用 MySQL 持久化用户与租户元数据（依托 mysql_data 卷）
+spring:
+  datasource:
+    url: jdbc:mysql://mysql:3306/iam?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: root
+    hikari:
+      # 启动时等待 MySQL 就绪：默认 30s 易在首次 up 时连不上，改为 60s 减少“需多次 up 或等一会才能登录”
+      connection-timeout: 60000
+  jpa:
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: false

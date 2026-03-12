@@ -21,6 +21,8 @@
 
 若使用 **Docker Compose** 启动 MySQL，会自动创建 `platform` 库；否则请先安装 MySQL 并创建空库（如 `platform`）。
 
+**IAM 用户与租户数据（Docker 环境）**：IAM 服务在 Docker 下使用 MySQL 的独立库 `iam`（非 `platform`）。首次启动时通过 JDBC 参数 `createDatabaseIfNotExist=true` 自动创建 `iam` 库，并由 JPA（`ddl-auto: update`）自动创建/更新 `sys_user`、`tenant_metadata` 表，**无需**对 IAM 执行任何 SQL 脚本。用户与租户数据随 MySQL 的 `mysql_data` 卷持久化，重启容器后注册账号仍可登录。
+
 在项目根目录下，按**顺序**执行 `docs/sql/` 中的脚本：
 
 1. **平台库与租户 Schema**  
@@ -83,7 +85,7 @@ docker-compose up -d
 ```
 
 将启动：MySQL、Redis、RabbitMQ、MailHog，以及网关、IAM、contact、template、campaign、scheduler、delivery、tracking、audit 各服务。  
-首次会构建镜像，构建上下文为项目根目录。
+首次会构建镜像，构建上下文为项目根目录。IAM 依赖 MySQL 健康后启动，并连接 MySQL 的 `iam` 库（自动建库建表）；若首次 up 后立刻访问登录接口失败，可等待数十秒后重试（Hikari 连接超时已设为 60 秒）。
 
 **端口一览**（宿主机）：
 
@@ -225,7 +227,16 @@ curl -X POST http://localhost:8080/api/iam/auth/refresh \
      VALUES (<groupId>, <contactId>, NOW());
      ```
    - 创建活动：`POST /api/campaign/campaign`，Body：`{"name":"验证活动","templateId":1,"groupId":1,"status":"draft"}`（templateId/groupId 与上面一致），记下 `data.id`（如 `campaignId=1`）。注意：创建时请求头会带 X-User-Id（网关从 JWT 注入），活动 `createdBy` 即为当前用户（如 admin 的 id=1）；未配置该用户 SMTP 时，发信走默认通道。
-3. **创建发送计划**：`POST /api/scheduler/schedule`，Body 中 `runAt` 设为当前时间 1～2 分钟后（格式 `yyyy-MM-dd HH:mm:ss`），例如：`{"campaignId":1,"cronExpr":"","runAt":"2025-03-10 15:05:00"}`。
+3. **创建发送计划**：`POST /api/scheduler/schedule`，Body 中 `runAt` 设为当前时间 1～2 分钟后（格式 `yyyy-MM-dd HH:mm:ss`），**注意时区约定**：
+
+   - 若通过 **前端界面**「立即发送」或「创建计划」操作，前端会自动将本地时间转换为 UTC 再传给后端，**无需手工处理时区**；
+   - 若通过 **Postman/终端直接调用接口**，`runAt` 应当使用 **UTC 时间**，避免 Docker 中按 UTC 运行的调度服务出现 8 小时时差。
+
+   示例 Body：
+
+   ```json
+   {"campaignId":1,"cronExpr":"","runAt":"2025-03-10 15:05:00"}
+   ```
 4. **等待触发**：scheduler 每分钟扫描，到点后会将活动触发消息投递到 RabbitMQ，delivery 消费后生成发送任务并发送。等待约 2 分钟后：
    - 打开 **MailHog Web UI**：`http://localhost:8025`，应能看到一封收件人为 `test@example.com` 的邮件（主题为「SMTP 验证邮件」）。
    - 调用 **投递状态**：`GET /api/delivery/delivery/status/1`（campaignId=1），应看到 `total`、`sent` 等汇总（如 `sent >= 1` 表示成功）。

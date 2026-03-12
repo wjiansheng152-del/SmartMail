@@ -84,9 +84,9 @@ services:
       - "8081:8081"
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:h2:mem:iam;DB_CLOSE_DELAY=-1;MODE=MySQL
-      SPRING_DATASOURCE_USERNAME: sa
-      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/iam?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
     depends_on:
       mysql:
         condition: service_healthy

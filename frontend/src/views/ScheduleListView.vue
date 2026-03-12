@@ -53,6 +53,7 @@ import { ElMessage } from 'element-plus'
 import * as scheduleApi from '@/api/schedule'
 import * as campaignApi from '@/api/campaign'
 import type { Campaign, ScheduleJob } from '@/types/entity'
+import { convertLocalRunAtStringToUtc, convertUtcStringToLocalDisplay } from '@/utils/datetime'
 
 const scheduleList = ref<ScheduleJob[]>([])
 const campaignList = ref<Campaign[]>([])
@@ -67,11 +68,22 @@ const formRules: FormRules = {
   campaignId: [{ required: true, message: '请选择活动', trigger: 'change' }],
 }
 
+/**
+ * 加载调度计划列表：
+ * - 后端返回的 runAt / createTime / updateTime 语义上为 UTC 时间字符串；
+ * - 这里统一转换为本地时间字符串后再赋值给表格，确保页面展示为用户所在时区（如北京时间）。
+ */
 async function loadSchedules() {
   loading.value = true
   try {
     const res = await scheduleApi.getScheduleList()
-    scheduleList.value = Array.isArray(res.data) ? res.data : []
+    const rawList = Array.isArray(res.data) ? res.data : []
+    scheduleList.value = rawList.map((item) => ({
+      ...item,
+      runAt: convertUtcStringToLocalDisplay(item.runAt),
+      createTime: convertUtcStringToLocalDisplay(item.createTime),
+      updateTime: convertUtcStringToLocalDisplay(item.updateTime),
+    }))
   } finally {
     loading.value = false
   }
@@ -87,6 +99,11 @@ function showCreate() {
   dialogVisible.value = true
 }
 
+/**
+ * 创建发送计划：
+ * - 用户在输入框中填写的 runAt 语义为「本地时间 yyyy-MM-dd HH:mm:ss」；
+ * - 提交给后端前，需要将该本地时间字符串转换为 UTC 字符串，避免调度触发时间出现时区偏差。
+ */
 async function handleSubmit() {
   await formRef.value?.validate(async (valid) => {
     if (!valid) return
@@ -97,7 +114,7 @@ async function handleSubmit() {
         campaignId: form.value.campaignId,
         createdBy: campaign?.createdBy ?? store.state.user.userId ?? undefined,
         cronExpr: form.value.cronExpr || undefined,
-        runAt: form.value.runAt || undefined,
+        runAt: form.value.runAt ? convertLocalRunAtStringToUtc(form.value.runAt) : undefined,
       })
       ElMessage.success('计划已创建')
       dialogVisible.value = false

@@ -109,7 +109,9 @@ docker exec smartmail-scheduler-1 date "+%Y-%m-%d %H:%M:%S"
 ```
 
 - **createdBy 必填**：投递时按「campaignId（local_id）+ createdBy」查活动，不传会导致触发错误活动或查不到。
-- **runAt 必须为 UTC**，不能填本地时间，否则调度可能一直不触发。
+- **runAt 时区约定**：
+  - 若是**前端界面**点击「立即发送」或在「定时发送」页创建计划，用户选择/输入的是**本地时间**，前端会自动转换为 **UTC 时间** 传给后端，无需手工换算；
+  - 若是 **Postman/终端直接调此接口**，`runAt` 必须使用 **UTC 时间**（上一步通过 `docker exec smartmail-scheduler-1 date` 拿到的时间并加几分钟），不能直接用本地北京时间，否则 Docker 中按 UTC 运行的调度服务可能一直不触发或延后数小时触发。
 - 响应 200 且 `data` 为数字（计划 **local_id**）即表示计划创建成功。到点后 scheduler 会投递触发消息，delivery 消费后按活动的 `created_by` 取用户 SMTP 发信。
 
 ### 3. 等待约 2 分钟后查投递状态

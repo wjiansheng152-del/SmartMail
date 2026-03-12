@@ -93,7 +93,7 @@
 
 | 方法 | 路径 | 请求/参数 | 响应 | 说明 |
 |------|------|------------|------|------|
-| POST | `/api/scheduler/schedule` | Body: ScheduleCreateRequest（**campaignId** 活动 local_id、**createdBy** 用户ID、cronExpr、runAt） | `Result<Long>` | 创建发送计划；**createdBy** 用于投递时按 local_id 查活动；返回 **计划 ID 为 local_id**（按 created_by 从 1 连续）；runAt 格式 yyyy-MM-dd HH:mm:ss |
+| POST | `/api/scheduler/schedule` | Body: ScheduleCreateRequest（**campaignId** 活动 local_id、**createdBy** 用户ID、cronExpr、runAt） | `Result<Long>` | 创建发送计划；**createdBy** 用于投递时按 local_id 查活动；返回 **计划 ID 为 local_id**（按 created_by 从 1 连续）；runAt 字符串格式 `yyyy-MM-dd HH:mm:ss`，语义为 **UTC 时间**（前端界面会自动在本地时间与 UTC 之间转换） |
 | GET | `/api/scheduler/schedule/list` | 请求头：X-User-Id（可选） | `Result<List<ScheduleJobListItem>>` | 若带 **X-User-Id** 仅返回该用户创建的计划；每项 **id 为计划的 local_id** |
 
 ---

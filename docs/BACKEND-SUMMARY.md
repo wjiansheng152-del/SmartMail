@@ -11,7 +11,7 @@
 | 模块 | 完成内容 |
 |------|----------|
 | **网关 (gateway)** | 统一入口 8080；路由到各微服务；JWT 校验（放行登录/刷新）；请求头注入 X-User-Id、X-Tenant-Id、X-Username；限流过滤器（RateLimitFilter） |
-| **IAM (iam)** | 登录（username/password）→ accessToken + refreshToken；刷新 Token；JWT 签发与校验；默认用户初始化（admin/admin123，DataInitializer）；平台库用户表 sys_user |
+| **IAM (iam)** | 登录（username/password）→ accessToken + refreshToken；刷新 Token；JWT 签发与校验；默认用户初始化（admin/admin123，DataInitializer）。**Docker 下**使用 MySQL 独立库 `iam`（application-docker.yml），用户表 sys_user、租户元数据 tenant_metadata 持久化于 mysql_data 卷；JPA ddl-auto: update 自动建表；Hikari connection-timeout: 60000 缓解启动时 MySQL 未就绪导致的登录失败。本地默认仍为 H2 内存库。 |
 | **公共 (common)** | 统一响应 Result、异常 ErrorResponse/ErrorCode/BizException、全局异常处理 GlobalExceptionHandler；租户上下文 TenantContext + TenantContextFilter（按 X-Tenant-Id 路由） |
 
 ### 2. 客户与联系人 (contact)
@@ -77,8 +77,8 @@
 
 | 项目 | 说明 |
 |------|------|
-| 库与表 | platform 库（sys_user、tenant_metadata）；租户库 tenant_default（contact、template、campaign、tracking、audit、delivery、scheduler、smtp_config、abtest、unsubscribe、blacklist 等 DDL） |
-| Docker | 各服务 Dockerfile；docker-compose 一键启动（MySQL、Redis、RabbitMQ、MailHog、各微服务）；依赖服务与业务服务同属 smartmail 网络；application-docker.yml 使用 mysql:3306 + root |
+| 库与表 | **iam 库**（Docker 下 IAM 专用，sys_user、tenant_metadata，JPA 自动建表）；platform 库（若沿用）；租户库 tenant_default（contact、template、campaign、tracking、audit、delivery、scheduler、smtp_config、abtest、unsubscribe、blacklist 等 DDL） |
+| Docker | 各服务 Dockerfile；docker-compose 一键启动（MySQL、Redis、RabbitMQ、MailHog、各微服务）；IAM 连 MySQL 的 iam 库（docker-compose 与 application-docker.yml），数据随 mysql_data 卷持久化；其他服务 application-docker.yml 使用 mysql:3306 + root |
 | 文档 | [docs/README.md](README.md)（文档索引）；API-AND-CLASS-REFERENCE.md（接口与重要类）；STARTUP-AND-VERIFICATION.md（启动与验证）；PROJECT-STATUS.md（项目状态汇总）；BUGFIX-LOG.md（问题修复记录）；RELEASE-CHECKLIST.md（发布检查） |
 
 ---

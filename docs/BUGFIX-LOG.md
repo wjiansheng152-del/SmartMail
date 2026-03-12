@@ -263,3 +263,19 @@ log.error("未捕获异常 path={} {}", request.getRequestURI(), ex.getMessage()
 ## 本次会话说明（local_id、分组成员、调度与计划隔离）
 
 第 14～17 条为本会话中与 local_id、分组成员解析、调度投递 createdBy、定时发送按用户隔离及计划 ID（local_id）相关的 Bug 与修复。功能汇总见 PROJECT-STATUS.md「三、近期更新汇总」。
+
+---
+
+## 18. 注册账号 docker-compose down 后无法登录、首次 up 后立刻登录失败
+
+**现象**：使用 Docker 时，执行 `docker-compose down` 再 `docker-compose up -d` 后，之前注册的非 admin 账号无法登录，需再次注册才能登录（但该账号下的模板等业务数据仍在）；另有时首次 up 后立刻调用登录接口失败，需多次执行 up 或等待一段时间后才正常。
+
+**原因**：  
+1. IAM 在 Docker 内原使用 H2 内存库（`jdbc:h2:mem:iam`），用户与租户元数据未持久化，容器重建后数据丢失。  
+2. 改为 MySQL 后，IAM 启动时若 MySQL 尚未完全就绪，Hikari 默认 30 秒连接超时易导致首次连接失败，表现为「刚 up 后立刻登录失败」。
+
+**修复**：  
+1. IAM 在 Docker 下改为连接 MySQL 独立库 `iam`：新增 `iam-service/src/main/resources/application-docker.yml`（数据源 URL 含 `createDatabaseIfNotExist=true`，JPA `ddl-auto: update`），并修改 `docker-compose.yml` 中 IAM 的 `SPRING_DATASOURCE_*` 为 MySQL（root/root）。用户与租户数据随 `mysql_data` 卷持久化。  
+2. 在 `application-docker.yml` 中为 Hikari 设置 `connection-timeout: 60000`，启动阶段有 60 秒等待 MySQL，减少「首次 up 后立刻登录失败」。
+
+**涉及文件**：`iam-service/src/main/resources/application-docker.yml`、`docker-compose.yml`。详见 PROJECT-STATUS.md「本会话改动：IAM 持久化与登录」。

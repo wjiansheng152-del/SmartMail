@@ -17,3 +17,6 @@ dist/
 .env
 .env.local
 *.log
+
+# 本地工具目录，不提交到仓库
+tools/

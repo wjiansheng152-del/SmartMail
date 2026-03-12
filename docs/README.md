@@ -36,6 +36,10 @@
 | [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md) | 发布前检查清单：构建测试、代码规范、配置安全、容器化、数据库、契约与日志 |
 | [BUGFIX-LOG.md](./BUGFIX-LOG.md) | 问题修复记录：Docker/MyBatis/PowerShell/SQL/发信/created_by 等历史问题与修复说明 |
 | [PROJECT-STATUS.md](./PROJECT-STATUS.md) | 项目当前状态汇总：进展、接口状态、待办与文档速查 |
+| [AI-开发协作规范.md](./AI-开发协作规范.md) | AI 协作开发总规范：流程、门禁、角色分工、模板与完成定义 |
+| [AI-岗位任务替代与协作边界.md](./AI-岗位任务替代与协作边界.md) | UI/前端/后端/移动/测试/运维/DBA 与 AI 的任务边界与职责划分 |
+| [AI-后端工程师使用指南.md](./AI-后端工程师使用指南.md) | 后端工程师详细 AI 使用手册：流程、提示词、门禁、排障与落地建议 |
+| [AI-前端工程师使用指南.md](./AI-前端工程师使用指南.md) | 前端工程师详细 AI 使用手册：流程、提示词、联调闭环与质量门禁 |
 
 ---
 
