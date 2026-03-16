@@ -20,3 +20,4 @@ dist/
 
 # 本地工具目录，不提交到仓库
 tools/
+SumOfConversations/
