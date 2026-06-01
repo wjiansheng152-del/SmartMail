@@ -279,3 +279,64 @@ log.error("未捕获异常 path={} {}", request.getRequestURI(), ex.getMessage()
 2. 在 `application-docker.yml` 中为 Hikari 设置 `connection-timeout: 60000`，启动阶段有 60 秒等待 MySQL，减少「首次 up 后立刻登录失败」。
 
 **涉及文件**：`iam-service/src/main/resources/application-docker.yml`、`docker-compose.yml`。详见 PROJECT-STATUS.md「本会话改动：IAM 持久化与登录」。
+
+---
+
+## 19. 用户 SMTP 发信失败导致 RabbitMQ 无限重试、QQ 邮箱连接频率限流
+
+**现象**：delivery 日志中 `SendTaskConsumer` 反复报错（如 `MailSendException`、`SSLException: Unsupported or unrecognized SSL message` 或 `550 Connection frequency limited`）；`delivery_task` 长期保持 `pending`；QQ 邮箱短时间内收到大量连接请求后被限流。
+
+**原因**：
+1. `SmtpEmailSender` 仅捕获 `MessagingException`，`mailSender.send()` 抛出的 `MailSendException`（运行时异常）未被捕获，导致 RabbitMQ 监听器失败并反复 requeue 同一条消息。
+2. 发信失败后无重试上限与退避，失败消息被立即或高频重投，加剧外部 SMTP 限流。
+3. QQ 邮箱 SMTP 端口与 SSL 模式需匹配：587 通常用 STARTTLS（`use_ssl=0`），465 用 SSL 直连（`use_ssl=1`）；配置错误会触发连接失败并进入上述重试循环。
+
+**修复**：
+1. `SmtpEmailSender` 增加对 `Exception` 的捕获，统一返回 `SendResult.success=false`，避免异常冒泡至 MQ 监听器。
+2. 新增 `SendProperties`（`app.send.max-attempts`、`retry-interval-ms`、`retry-backoff-multiplier`、`max-retry-interval-ms`），`SendTaskPayload` 增加 `retryCount`。
+3. `SendTaskConsumer`：失败时未达上限则延迟（指数退避）后重新入队并保持 `pending`；达到上限后标记 `failed` 并停止重试。
+4. `application.yml` 设置 `spring.rabbitmq.listener.simple.default-requeue-rejected: false`，防止监听器异常时消息无限 requeue。
+
+**默认配置**：最多尝试 3 次；重试间隔 30s 起，倍数 2.0，单次等待上限 5 分钟。
+
+**涉及文件**：
+- `delivery-service/.../SendProperties.java`（新建）
+- `delivery-service/.../SendTaskConsumer.java`
+- `delivery-service/.../SendTaskPayload.java`
+- `delivery-service/.../SmtpEmailSender.java`
+- `delivery-service/.../RabbitConfig.java`
+- `delivery-service/src/main/resources/application.yml`
+
+---
+
+## 20. 前端 Docker 镜像构建失败（run-p not found / type-check 报错）
+
+**现象**：`docker compose build frontend` 失败，报错 `sh: run-p: not found` 或 `vue-tsc` 类型检查错误导致 `npm run build` 退出。
+
+**原因**：
+1. Dockerfile 使用 `npm ci --omit=dev`，构建阶段缺少 `npm-run-all`、`vite`、`typescript` 等 devDependencies。
+2. `npm run build` 会并行执行 `type-check`，Docker 构建环境下 TypeScript 检查未通过时导致构建失败。
+
+**修复**：
+1. 构建阶段改为 `npm ci`（含 devDependencies）。
+2. Docker 构建使用 `npm run build-only`（仅 Vite 打包，跳过 type-check）；本地开发仍可用 `npm run build` 做完整检查。
+
+**涉及文件**：`frontend/Dockerfile`
+
+---
+
+## 21. MailHog 验证脚本在 Windows PowerShell 下执行失败
+
+**现象**：`docs/scripts/verify-smtp-send.ps1` 登录报 500、SQL 步骤需人工交互、scheduler 容器 UTC 时区下计划未触发。
+
+**原因**：
+1. Windows 下 `curl.exe` 配合 `ConvertTo-Json` 传参格式异常，IAM 登录请求体解析失败。
+2. 脚本原设计需手动执行 SQL 将联系人加入分组。
+3. 脚本使用本地时区设置 `runAt`，而 scheduler 容器默认为 UTC，导致到点判断偏差。
+
+**修复**：
+1. 统一改用 `Invoke-RestMethod` 调用 API。
+2. 自动执行 `INSERT IGNORE INTO contact_group_member ...`。
+3. `runAt` 使用 `(Get-Date).ToUniversalTime()` 与 scheduler 容器时区一致。
+
+**涉及文件**：`docs/scripts/verify-smtp-send.ps1`

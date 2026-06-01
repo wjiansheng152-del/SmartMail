@@ -5,13 +5,15 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+# 构建阶段需要 devDependencies（vite、typescript、npm-run-all 等）
+RUN npm ci
 
 COPY . .
 # 生产环境请求走同源 /api，由 Nginx 代理到网关
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-RUN npm run build
+# Docker 构建跳过 type-check，仅打包静态资源（本地开发仍可用 npm run build 做完整检查）
+RUN npm run build-only
 
 # 阶段二：运行
 FROM nginx:alpine

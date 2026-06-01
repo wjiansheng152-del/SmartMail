@@ -20,4 +20,10 @@ public class SendTaskPayload {
     private String tenantId;
     /** 活动创建人 ID，用于按用户 SMTP 发信；有值则优先用该用户的 smtp_config，否则用默认通道 */
     private Long smtpConfigUserId;
+
+    /**
+     * 已重试次数（不含当前正在执行的尝试）。
+     * 首次入队为 null 或 0；每次失败后重新入队时递增，达到 maxAttempts 后不再重试。
+     */
+    private Integer retryCount;
 }

@@ -54,7 +54,7 @@
 |------|------|
 | 状态查询 | GET /status/{campaignId} 按 campaign_batch 汇总该活动下各批次的 total、sent、failed |
 | **用户 SMTP 配置** | GET /smtp-config：按 X-User-Id 查询当前用户在本租户下的 SMTP 配置（密码脱敏）；PUT /smtp-config：保存/更新当前用户配置（密码 AES 加密落库）。发送时按活动创建人（campaign.created_by）取该用户的 smtp_config，有则用其动态构建 JavaMailSender 发信，无则用默认通道（如 MailHog） |
-| 发送能力 | SendTaskConsumer 消费 smartmail.send.task；若 SendTaskPayload 带 smtpConfigUserId 则按用户 SMTP 发信，否则调用 SendStrategy 默认通道；回写 delivery_task 状态与 campaign_batch 的 success_count/fail_count |
+| 发送能力 | SendTaskConsumer 消费 smartmail.send.task；若 SendTaskPayload 带 smtpConfigUserId 则按用户 SMTP 发信，否则调用 SendStrategy 默认通道；回写 delivery_task 状态与 campaign_batch 的 success_count/fail_count。**发信失败有限重试**（`app.send.max-attempts` 默认 3 次，指数退避），耗尽后标记 failed 并停止，避免外部 SMTP 限流；`default-requeue-rejected: false` 防止 MQ 无限 requeue |
 | 活动触发消费 | CampaignTriggerConsumer 消费 smartmail.campaign.trigger：拉取活动/模板/分组联系人，过滤退订与黑名单，创建 campaign_batch 与 delivery_task，向发送队列投递 SendTaskPayload（含 deliveryId、batchId、campaignId、smtpConfigUserId 等），邮件正文中注入打开追踪像素 URL |
 | 数据 | 租户库 delivery_task（含 batch_id）、campaign_batch、**smtp_config**（按 user_id 存用户 SMTP）；DownstreamClient 调用 contact/template/campaign 服务获取数据；campaign 表含 created_by（活动创建人） |
 

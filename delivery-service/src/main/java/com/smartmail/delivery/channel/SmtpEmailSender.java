@@ -1,7 +1,6 @@
 package com.smartmail.delivery.channel;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
@@ -37,6 +36,9 @@ public class SmtpEmailSender implements EmailSender {
             mailSender.send(message);
             return SendResult.builder().success(true).messageId(message.getMessageID()).build();
         } catch (MessagingException e) {
+            return SendResult.builder().success(false).errorMessage(e.getMessage()).build();
+        } catch (Exception e) {
+            // MailSendException 等运行时异常也需捕获，避免 RabbitMQ 监听器反复 requeue 导致外部 SMTP 限流
             return SendResult.builder().success(false).errorMessage(e.getMessage()).build();
         }
     }

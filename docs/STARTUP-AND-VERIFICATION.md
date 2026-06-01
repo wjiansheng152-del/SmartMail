@@ -240,7 +240,7 @@ curl -X POST http://localhost:8080/api/iam/auth/refresh \
 4. **等待触发**：scheduler 每分钟扫描，到点后会将活动触发消息投递到 RabbitMQ，delivery 消费后生成发送任务并发送。等待约 2 分钟后：
    - 打开 **MailHog Web UI**：`http://localhost:8025`，应能看到一封收件人为 `test@example.com` 的邮件（主题为「SMTP 验证邮件」）。
    - 调用 **投递状态**：`GET /api/delivery/delivery/status/1`（campaignId=1），应看到 `total`、`sent` 等汇总（如 `sent >= 1` 表示成功）。
-5. **若未收到**：检查 scheduler 与 delivery 容器/进程日志（如 `docker logs smartmail-delivery-1 --tail 50`）；确认 RabbitMQ 队列 `smartmail.campaign.trigger`、`smartmail.send.task` 有被消费；确认 MailHog 端口 1025 在 delivery 侧可访问（Docker 下 host 为 `mailhog`）。**若专门验证 scheduler 在 Docker 内能否到点触发**，可参考 [SCHEDULER-DOCKER-TEST.md](./SCHEDULER-DOCKER-TEST.md)。
+5. **若未收到**：检查 scheduler 与 delivery 容器/进程日志（如 `docker logs smartmail-delivery-1 --tail 50`）；确认 RabbitMQ 队列 `smartmail.campaign.trigger`、`smartmail.send.task` 有被消费；确认 MailHog 端口 1025 在 delivery 侧可访问（Docker 下 host 为 `mailhog`）。**用户 SMTP 发信失败**时 delivery 会按 `app.send.max-attempts`（默认 3 次）指数退避重试，耗尽后标记 `failed` 并停止，详见 BUGFIX-LOG 第 19 条。**若专门验证 scheduler 在 Docker 内能否到点触发**，可参考 [SCHEDULER-DOCKER-TEST.md](./SCHEDULER-DOCKER-TEST.md)。
 
 #### 方式 B：用户 SMTP 配置（真实 SMTP）验证
 
@@ -265,7 +265,7 @@ curl -X POST http://localhost:8080/api/iam/auth/refresh \
 
 #### 一键验证脚本（方式 A，PowerShell）
 
-项目在 `docs/scripts/verify-smtp-send.ps1` 提供了脚本：登录 → 创建模板/分组/联系人 → 提示执行一条 SQL 将联系人加入分组 → 创建活动与计划（runAt=当前时间+2 分钟）→ 等待后查询投递状态并提示打开 MailHog。需在项目根目录、网关 8080 可用时执行；默认用户 `admin` / `admin123`。
+项目在 `docs/scripts/verify-smtp-send.ps1` 提供了脚本：登录 → 创建模板/分组/联系人 → **自动**将联系人加入分组（SQL）→ 创建活动与计划（`runAt` 为当前 UTC 时间 +2 分钟，与 scheduler 容器时区一致）→ 等待后查询投递状态并提示打开 MailHog。需在项目根目录、网关 8080 可用时执行；默认用户 `admin` / `admin123`。Windows 下使用 `Invoke-RestMethod` 调用 API，避免 `curl.exe` 传 JSON 失败。
 
 ### 6. 单元/集成测试（可选）
 

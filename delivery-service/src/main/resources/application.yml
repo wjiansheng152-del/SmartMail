@@ -9,6 +9,10 @@ spring:
     port: 5672
     username: guest
     password: guest
+    listener:
+      simple:
+        # 监听器抛出异常时不再 requeue，避免 SMTP 失败消息无限循环
+        default-requeue-rejected: false
   mail:
     host: localhost
     port: 1025
@@ -41,6 +45,11 @@ app:
   send:
     exchange: smartmail.send
     routing-key: send.task
+    # 单条投递最大尝试次数（含首次），失败后按间隔重试，耗尽后标记 failed 并停止
+    max-attempts: 3
+    retry-interval-ms: 30000
+    retry-backoff-multiplier: 2.0
+    max-retry-interval-ms: 300000
   default:
     from: noreply@smartmail.local
   smtp:
