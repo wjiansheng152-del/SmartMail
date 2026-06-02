@@ -7,14 +7,16 @@ import com.smartmail.delivery.entity.DeliveryTask;
 import com.smartmail.delivery.mapper.CampaignBatchMapper;
 import com.smartmail.delivery.mapper.DeliveryTaskMapper;
 import com.smartmail.delivery.mq.SendTaskPayload;
+import com.smartmail.delivery.mq.SendTaskReadyEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -36,7 +38,7 @@ public class PrepareSendService {
     private final DownstreamClient downstreamClient;
     private final DeliveryTaskMapper deliveryTaskMapper;
     private final CampaignBatchMapper campaignBatchMapper;
-    private final RabbitTemplate rabbitTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.send.exchange:smartmail.send}")
     private String sendExchange;
@@ -142,6 +144,8 @@ public class PrepareSendService {
             Long batchId = batch.getId();
 
             String trackingBaseUrl = downstreamClient.getTrackingBaseUrl().replaceFirst("/$", "");
+            // 收集 payload，待事务提交后由 SendTaskReadyListener 统一入队
+            List<SendTaskPayload> sendPayloads = new ArrayList<>(toSend.size());
 
             for (Map<String, Object> contact : toSend) {
                 String email = (String) contact.get("email");
@@ -170,9 +174,11 @@ public class PrepareSendService {
                 payload.setChannel("smtp");
                 payload.setTenantId(tenantId);
                 payload.setSmtpConfigUserId(campaignCreatedBy);
-                rabbitTemplate.convertAndSend(sendExchange, sendRoutingKey, payload);
+                sendPayloads.add(payload);
             }
-            log.info("Enqueued {} send tasks for campaignId={}, batchId={}", toSend.size(), campaignId, batchId);
+            eventPublisher.publishEvent(new SendTaskReadyEvent(this, sendPayloads, sendExchange, sendRoutingKey));
+            log.info("Prepared {} send tasks for campaignId={}, batchId={}, will enqueue after commit",
+                    toSend.size(), campaignId, batchId);
         } finally {
             TenantContext.clear();
         }

@@ -78,7 +78,10 @@ public class SendTaskConsumer {
                 .build();
         SendResult result = sender.send(req);
         if (result.isSuccess()) {
-            markTaskSuccess(payload);
+            if (markTaskSuccess(payload)) {
+                log.info("Send succeeded deliveryId={} campaignId={} to={}",
+                        payload.getDeliveryId(), payload.getCampaignId(), payload.getTo());
+            }
         } else {
             handleSendFailure(payload, result.getErrorMessage());
         }
@@ -161,16 +164,25 @@ public class SendTaskConsumer {
         );
     }
 
-    /** 发信成功：回写 delivery_task 与批次成功计数 */
-    private void markTaskSuccess(SendTaskPayload payload) {
+    /**
+     * 发信成功：回写 delivery_task 与批次成功计数。
+     *
+     * @return 是否成功回写 delivery_task（deliveryId 为空时仅更新批次，视为成功）
+     */
+    private boolean markTaskSuccess(SendTaskPayload payload) {
         LocalDateTime now = LocalDateTime.now();
+        boolean taskUpdated = true;
         if (payload.getDeliveryId() != null) {
-            DeliveryTask task = deliveryTaskMapper.selectById(payload.getDeliveryId());
+            DeliveryTask task = loadDeliveryTaskWithRetry(payload.getDeliveryId());
             if (task != null) {
                 task.setStatus("sent");
                 task.setFailReason(null);
                 task.setUpdateTime(now);
                 deliveryTaskMapper.updateById(task);
+            } else {
+                taskUpdated = false;
+                log.error("Send succeeded but delivery_task not found, status not updated: deliveryId={} tenantId={} to={}",
+                        payload.getDeliveryId(), payload.getTenantId(), payload.getTo());
             }
         }
         if (payload.getBatchId() != null) {
@@ -179,20 +191,27 @@ public class SendTaskConsumer {
                 batch.setSuccessCount((batch.getSuccessCount() == null ? 0 : batch.getSuccessCount()) + 1);
                 batch.setUpdateTime(now);
                 campaignBatchMapper.updateById(batch);
+            } else {
+                log.error("Send succeeded but campaign_batch not found: batchId={} deliveryId={}",
+                        payload.getBatchId(), payload.getDeliveryId());
             }
         }
+        return taskUpdated;
     }
 
     /** 达到最大重试次数后标记失败，并更新批次失败计数 */
     private void markTaskFailed(SendTaskPayload payload, String errorMessage) {
         LocalDateTime now = LocalDateTime.now();
         if (payload.getDeliveryId() != null) {
-            DeliveryTask task = deliveryTaskMapper.selectById(payload.getDeliveryId());
+            DeliveryTask task = loadDeliveryTaskWithRetry(payload.getDeliveryId());
             if (task != null) {
                 task.setStatus("failed");
                 task.setFailReason(errorMessage);
                 task.setUpdateTime(now);
                 deliveryTaskMapper.updateById(task);
+            } else {
+                log.error("Mark failed but delivery_task not found: deliveryId={} tenantId={} reason={}",
+                        payload.getDeliveryId(), payload.getTenantId(), errorMessage);
             }
         }
         if (payload.getBatchId() != null) {
@@ -203,6 +222,29 @@ public class SendTaskConsumer {
                 campaignBatchMapper.updateById(batch);
             }
         }
+    }
+
+    /**
+     * 带短重试加载投递任务，应对极端情况下事务提交与消费者几乎同时到达的边界时序。
+     */
+    private DeliveryTask loadDeliveryTaskWithRetry(Long deliveryId) {
+        final int maxAttempts = 3;
+        final long retryIntervalMs = 50L;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            DeliveryTask task = deliveryTaskMapper.selectById(deliveryId);
+            if (task != null) {
+                return task;
+            }
+            if (attempt < maxAttempts) {
+                try {
+                    Thread.sleep(retryIntervalMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        return null;
     }
 
     private static String truncate(String text, int maxLen) {
